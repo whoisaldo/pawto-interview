@@ -5,6 +5,7 @@ Start with the page for what you are doing.
 - [Development](development.md): run TandemCode locally, run the checks, and make common changes.
 - [Architecture](architecture.md): the parts of the system, how a request and a run move through them, and where each piece lives in the code.
 - [Judge and sandbox](judge-and-sandbox.md): how submissions are judged and what isolates them.
+- [Interviews](interviews.md): interview sessions on top of rooms, what each side sees, the AI assistant and demo mode.
 - [Self-hosting](self-hosting.md): run your own instance on one Linux host.
 - [Decisions](decisions/): why the system is shaped the way it is.
 

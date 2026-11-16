@@ -29,6 +29,10 @@ To try a room with two people, sign in with a second Clerk account in a private 
 
 `make` on its own lists every command. The ports are 5173 for the web app, 8080 for the API and 5433 for Postgres, which listens on loopback only.
 
+## A demonstration without Clerk
+
+The interview screens can run with a local stand-in for sign-in, for a demonstration on one machine. Set `AUTH_MODE=demo` and its two secrets for the API, leave the Clerk values empty, and build the web app with `VITE_AUTH_MODE=demo`. [Interviews](interviews.md) has the steps and says what demo mode refuses to do. It is not for a deployment.
+
 ## Checks
 
 ```bash
@@ -54,6 +58,10 @@ Requests go from `app/routes/` to `app/services/` to `app/dao/`:
 ### A room event
 
 The server sends events to everyone in a room with `RoomChatManager.broadcast` in `app/websocket/room_chat.py`. The web app handles them in `apps/web/src/hooks/UseWebSocket.ts`. There is one room socket per room: `RoomView` opens it and passes its state to the components that need it.
+
+### An interview rule
+
+Who may see or do what in an interview session is decided in `app/services/interviews.py`. Runs leave the API on several paths, so a change to what a candidate may see goes in `RunVisibility` and `run_view` there, not in one route. The limits on the assistant are constants at the top of `app/assistant/cli.py` and `app/services/assistant.py`. The web app's interview screens are in `apps/web/src/console/`.
 
 ### A problem
 

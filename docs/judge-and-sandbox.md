@@ -6,6 +6,8 @@ A problem's tests are a JSON list of `{"input", "expected", "hidden"}`. A submis
 
 Tests run in order and judging stops at the first failure. The verdict is one of `accepted`, `wrong_answer`, `runtime_error` or `time_limit_exceeded`, with the time taken and a result for each test that ran. For a hidden test the result says only whether it passed: its input, expected output and the program's output are never returned, since a failing program's output can echo the test.
 
+A problem can ask for every test to be judged instead, with the `judge_all_tests` column. The status is then that of the first test that failed, and what a hidden test gives away does not change. Interview problems use this so that each case can be shown by name. A test may carry a `name` for that. In an interview the hidden tests are held back from the candidate altogether until the interviewer reveals them, which [interviews](interviews.md) describes.
+
 Hidden tests keep the examples short and stop people writing code for the visible cases only. They are not secret: the migrations that add them are in this repository.
 
 Each problem sets its own time and memory limit per test. Migration V12 bounds what a problem may ask for.

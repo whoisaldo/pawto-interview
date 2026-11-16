@@ -37,6 +37,7 @@ Two people share a room, edit the same code with live cursors, chat, and run the
 - Problems with starter code, visible examples and hidden tests, added by pull request.
 - Python submissions judged in an isolated container per run, with the verdict shown to everyone in the room.
 - A replay of each session: the code as it was typed, the chat and every run.
+- Interview sessions on top of rooms: a clock, held-back cases, an optional Claude assistant whose use the interviewer can read, and evidence notes that export as JSON or Markdown.
 
 ## Run it locally
 
@@ -64,6 +65,7 @@ make web      # http://localhost:5173
 - [Development](docs/development.md)
 - [Architecture](docs/architecture.md)
 - [Judge and sandbox](docs/judge-and-sandbox.md)
+- [Interviews](docs/interviews.md)
 - [Self-hosting](docs/self-hosting.md)
 - [Decisions](docs/decisions/)
 

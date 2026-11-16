@@ -16,6 +16,8 @@ The browser signs in with Clerk and gets a short-lived session token. It sends t
 
 The API verifies the token at the edge and nowhere else: `app/core/auth.py` checks the signature against Clerk's keys, the issuer and the origin that requested it. Routes and websocket handlers turn it into a user id, and everything past that point works with the id. A user's name and email come from Clerk's API (`app/core/clerk.py`), never from the browser.
 
+Both boundaries call `authenticated_user_id` in `app/core/auth.py`, which is the one place that chooses how a token is checked. A demonstration can run without Clerk in demo mode, which is off by default and is described in [interviews](interviews.md).
+
 ## A request
 
 HTTP requests go from `app/routes/` to `app/services/` to `app/dao/`. Routes parse input and authenticate. Services hold the rules: who may read a room, who may change its problem, how many rooms or runs a user may start per hour. DAOs hold all the SQL, written by hand for asyncpg. Rate limits that must hold under parallel requests are enforced inside a transaction in the DAO, not by counting first and inserting later.
@@ -41,6 +43,12 @@ Complexity analysis of an accepted run (`POST /api/submissions/{id}/analysis`) g
 
 The runner polls for work and handles one submission at a time. A submission left running by a runner that died is put back in the queue when a runner starts.
 
+## An interview
+
+An interview session is a room plus a clock, an AI policy and an interviewer's notes (`app/services/interviews.py`). It adds no websocket. The room socket carries one more event, `interview`, which tells both sides to read the session again over HTTP, where the API decides what each seat may see. The interview's problem can ask the judge to run every test instead of stopping at the first failure.
+
+When a session allows AI, the API answers questions by running a Claude CLI on its own host, with no tools and a fixed argument list (`app/assistant/cli.py`). [Interviews](interviews.md) covers the roles, the held-back cases and the assistant.
+
 ## Replay
 
 When a room closes, its history stays. `GET /api/rooms/{id}/replay` returns the recorded editor changes, the chat and the runs, and the web app (`apps/web/src/routes/rooms/Replay.tsx`) plays them back. Each room has a recording budget (`MAX_RECORDED_BYTES_PER_ROOM` in `yjs.py`), after which it keeps relaying but stops recording.
@@ -56,5 +64,6 @@ The schema is the SQL in `apps/backend/migrations/`, applied in order by `app/mi
 - An endpoint's rules: `apps/backend/app/services/`.
 - A query: `apps/backend/app/dao/`.
 - Realtime behaviour: `apps/backend/app/websocket/`.
+- Interview sessions and the assistant: `apps/backend/app/services/interviews.py`, `apps/backend/app/services/assistant.py`, `apps/backend/app/assistant/`, and `apps/web/src/console/`.
 - Judging: `apps/backend/app/runner/`.
 - Production: `infra/`.

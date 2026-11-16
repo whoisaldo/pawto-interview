@@ -6,6 +6,9 @@ Each record explains one choice that shapes the system, and why. Records are not
 - [0002](0002-a-container-per-run.md): each submission runs in its own container, under gVisor in production
 - [0003](0003-the-server-relays-the-editor.md): the server relays the shared editor and keeps no copy of it
 - [0004](0004-problems-are-migrations.md): problems are added by migration, through pull requests
+- [0005](0005-interviews-sit-on-rooms.md): an interview session is a room with a clock, a policy and notes, and the API decides what each seat sees
+- [0006](0006-the-assistant-is-a-local-cli-with-no-tools.md): the interview assistant runs a Claude CLI on the API's host, with no tools and no fallback
+- [0007](0007-a-demo-sign-in-that-cannot-replace-clerk.md): a demonstration can sign in without Clerk, in a mode built to refuse a deployment
 
 ## Writing one
 
