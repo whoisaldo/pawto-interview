@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useAuth } from "@clerk/clerk-react";
+import { useSession } from "../lib/auth";
 import Editor from "@monaco-editor/react";
 import type { OnMount } from "@monaco-editor/react";
 import * as Y from "yjs";
@@ -25,7 +25,29 @@ interface Props {
   onCodeChange: (code: string) => void;
   // The colour a user id is shown in everywhere else in the room.
   colorOf: (userId: string) => string;
+  // The rest are for the interview room; a practice room leaves them out.
+  height?: string;
+  readOnly?: boolean;
+  fontSize?: number;
+  // Where this browser keeps its own copy of the text. The relay keeps none,
+  // so without this a lone person who reloads comes back to the starter.
+  draftKey?: string;
+  // Changing this replaces the text with the starter code, for everyone.
+  restoreToken?: number;
+  // Ctrl or Cmd with Enter, pressed inside the editor.
+  onRunShortcut?: () => void;
 }
+
+const DRAFT_SAVE_MS = 400;
+
+const readDraft = (key: string | undefined): string | null => {
+  if (!key) return null;
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
 
 // y-monaco tags each remote selection with the peer's Yjs client id and
 // leaves the colouring to us. One stylesheet, rewritten whenever the set of
@@ -65,8 +87,14 @@ const CollaborativeEditor = ({
   writesStarter,
   onCodeChange,
   colorOf,
+  height = "420px",
+  readOnly = false,
+  fontSize = 14,
+  draftKey,
+  restoreToken,
+  onRunShortcut,
 }: Props) => {
-  const { getToken, isLoaded, isSignedIn, sessionId } = useAuth();
+  const { getToken, isLoaded, isSignedIn, sessionId } = useSession();
   // Held in a ref so that a fresh getToken identity from Clerk cannot re-run the
   // effect below and tear down the shared document mid-session.
   const getTokenRef = useRef(getToken);
@@ -86,6 +114,11 @@ const CollaborativeEditor = ({
   starterCodeRef.current = starterCode;
   const writesStarterRef = useRef(writesStarter);
   writesStarterRef.current = writesStarter;
+  const draftKeyRef = useRef(draftKey);
+  draftKeyRef.current = draftKey;
+  const onRunShortcutRef = useRef(onRunShortcut);
+  onRunShortcutRef.current = onRunShortcut;
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // The relay keeps no document, so a room's text lives only in its peers. The
   // starter code goes in when the shared text is empty after sync, written by
@@ -97,7 +130,9 @@ const CollaborativeEditor = ({
   // text with the new starter, since code for the old problem is no use.
   const shownProblemRef = useRef<string | null>(null);
   const seedStarterCode = (ydoc: Y.Doc) => {
-    const starter = starterCodeRef.current;
+    // This browser's own copy wins over the starter: it is what was here
+    // before a reload emptied the room.
+    const starter = readDraft(draftKeyRef.current) || starterCodeRef.current;
     const ytext = ydoc.getText("code");
     if (starter && writesStarterRef.current && !seededRef.current && ytext.length === 0) {
       seededRef.current = true;
@@ -207,21 +242,50 @@ const CollaborativeEditor = ({
     seedStarterCode(ydoc);
   }, [problemId, starterCode, replacesOnProblemChange, writesStarter]);
 
+  // An explicit restore replaces whatever is there, drafts included.
+  const restoredRef = useRef(restoreToken);
+  useEffect(() => {
+    if (restoreToken === restoredRef.current) return;
+    restoredRef.current = restoreToken;
+    const ydoc = ydocRef.current;
+    if (!ydoc || starterCode == null) return;
+    const ytext = ydoc.getText("code");
+    ydoc.transact(() => {
+      ytext.delete(0, ytext.length);
+      ytext.insert(0, starterCode);
+    });
+    seededRef.current = true;
+  }, [restoreToken, starterCode]);
+
+  useEffect(() => () => clearTimeout(draftTimer.current), []);
+
   // The roster decides colours, so a join or leave can recolour a cursor.
   useEffect(() => {
     const provider = providerRef.current;
     if (provider) setPeerStyles(cursorStyles(provider.awareness, colorOf));
   }, [colorOf]);
 
-  const handleMount: OnMount = (editor) => {
+  const handleMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => onRunShortcutRef.current?.());
 
     if (ydocRef.current && providerRef.current) {
       createBinding(ydocRef.current, providerRef.current, editor);
     }
 
     editor.onDidChangeModelContent(() => {
-      onCodeChange(editor.getValue());
+      const text = editor.getValue();
+      onCodeChange(text);
+      const key = draftKeyRef.current;
+      if (!key) return;
+      clearTimeout(draftTimer.current);
+      draftTimer.current = setTimeout(() => {
+        try {
+          localStorage.setItem(key, text);
+        } catch {
+          // No storage: the text still lives in the room while someone is in it.
+        }
+      }, DRAFT_SAVE_MS);
     });
   };
 
@@ -229,14 +293,15 @@ const CollaborativeEditor = ({
     <>
       <style>{peerStyles}</style>
       <Editor
-        height="420px"
+        height={height}
         defaultLanguage="python"
         theme={EDITOR_THEME}
         beforeMount={defineEditorTheme}
         onMount={handleMount}
         options={{
           minimap: { enabled: false },
-          fontSize: 14,
+          fontSize,
+          readOnly,
           lineNumbers: "on",
           scrollBeyondLastLine: false,
           automaticLayout: true,

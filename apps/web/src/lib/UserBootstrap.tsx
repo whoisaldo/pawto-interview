@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { useAuth } from "@clerk/clerk-react";
+import { useSession } from "./auth";
 import { UserContext } from "../hooks/useUser";
 import type { BackendUser } from "../hooks/useUser";
 import { userApi } from "./api";
@@ -27,7 +27,7 @@ const Notice = ({ children }: { children: ReactNode }) => (
  * row that did not exist yet.
  */
 export const UserBootstrap = ({ children }: { children: ReactNode }) => {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, userId } = useSession();
   const [state, setState] = useState<State>({ status: "pending" });
 
   useEffect(() => {
@@ -56,7 +56,8 @@ export const UserBootstrap = ({ children }: { children: ReactNode }) => {
     return () => {
       cancelled = true;
     };
-  }, [isLoaded, isSignedIn]);
+    // userId: a different person signing in on this tab is a different row.
+  }, [isLoaded, isSignedIn, userId]);
 
   if (!isLoaded || state.status === "pending") {
     return <Notice>Loading...</Notice>;

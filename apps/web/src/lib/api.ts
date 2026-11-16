@@ -1,5 +1,5 @@
 import axios from "axios";
-import { getSessionToken } from "./auth";
+import { getSessionToken, reportUnauthorized } from "./auth";
 import { API_BASE_URL } from "./config";
 
 export const api = axios.create({
@@ -9,17 +9,23 @@ export const api = axios.create({
   },
 });
 
-// Every /api route requires a Clerk session token. Attaching it here means no
+// Every /api route requires a session token. Attaching it here means no
 // call site has to remember to.
 api.interceptors.request.use(async (config) => {
   const token = await getSessionToken();
   // Fail closed. Sending the request without a token would only turn a missing
   // session into a confusing 401 from the server.
   if (!token) {
-    throw new Error("No Clerk session token available");
+    throw new Error("No session token available");
   }
   config.headers.Authorization = `Bearer ${token}`;
   return config;
+});
+
+// A refused token means the session ended. Its holder decides what to do.
+api.interceptors.response.use(undefined, (error) => {
+  if (error?.response?.status === 401) reportUnauthorized();
+  return Promise.reject(error);
 });
 
 export type RoomVisibility = "public" | "unlisted";

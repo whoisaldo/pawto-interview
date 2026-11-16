@@ -1,6 +1,6 @@
 // custom hook
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAuth } from "@clerk/clerk-react";
+import { useSession } from "../lib/auth";
 import { WS_BASE_URL } from "../lib/config";
 
 export interface ChatMessage {
@@ -76,8 +76,11 @@ const useWebSocket = (roomId: string) => {
   // The owner's latest switch, as an object so switching back to a problem
   // seen before is still a new value.
   const [problemChange, setProblemChange] = useState<{ problemId: string } | null>(null);
+  // An interview room's session changed (its clock, its policy, a finished
+  // assistant answer). An object, so two changes in a row are two values.
+  const [interviewChange, setInterviewChange] = useState<{ what: string } | null>(null);
 
-  const { getToken, userId } = useAuth();
+  const { getToken, userId } = useSession();
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
 
@@ -153,6 +156,11 @@ const useWebSocket = (roomId: string) => {
           return;
         }
 
+        if (payload.type === "interview") {
+          setInterviewChange({ what: String(payload.what) });
+          return;
+        }
+
         if (payload.type === "chat") {
           setMessages((prev) => [
             ...prev,
@@ -205,6 +213,7 @@ const useWebSocket = (roomId: string) => {
     members,
     submissions,
     problemChange,
+    interviewChange,
     // The socket only carries what happens while it is open; the room loads
     // history through this and reloads it after a reconnect.
     seedSubmissions: (history: Submission[]) =>
