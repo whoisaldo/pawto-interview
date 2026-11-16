@@ -32,6 +32,7 @@ export const PlanStrip = ({
   });
   const elapsed = Math.min(live.elapsed, clock.durationSeconds);
   const begun = clock.status !== "scheduled";
+  const ended = clock.status === "ended";
   const current = begun && live.over === 0 ? spans.find((span) => elapsed >= span.from && elapsed < span.to) : undefined;
 
   return (
@@ -39,7 +40,7 @@ export const PlanStrip = ({
       <div className="relative">
         <ol className="flex" aria-label="Plan for the session">
           {spans.map((span) => {
-            const here = span === current;
+            const here = span === current && !ended;
             const past = begun && elapsed >= span.to;
             return (
               <li
@@ -78,6 +79,12 @@ export const PlanStrip = ({
       <p className={cn("mt-2 text-pretty text-muted", compact ? "text-xs" : "text-body")} aria-live="polite">
         {!begun ? (
           `The plan covers ${clockText(clock.durationSeconds)}. It starts with ${spans[0].phase.toLowerCase()}.`
+        ) : ended ? (
+          current ? (
+            `Ended at ${clockText(live.elapsed)}, during ${current.phase.toLowerCase()}.`
+          ) : (
+            `Ended at ${clockText(live.elapsed)}, past the planned ${clockText(clock.durationSeconds)}.`
+          )
         ) : live.over > 0 ? (
           "The planned time is used up."
         ) : current ? (

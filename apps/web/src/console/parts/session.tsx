@@ -19,9 +19,10 @@ export const InviteLink = ({ inviteCode }: { inviteCode: string }) => (
   <CopyField label="Candidate invite link" value={inviteUrl(inviteCode)} />
 );
 
-/** Time left, large, with what it is counted against. */
+/** Time left while a session can still run, and time used once it has ended. */
 export const ClockReadout = ({ clock, size = "lg" }: { clock: Clock; size?: "md" | "lg" }) => {
   const live = useLiveClock(clock);
+  const ended = clock.status === "ended";
   const over = live.over > 0;
   return (
     <div className="flex items-baseline gap-2.5">
@@ -32,15 +33,17 @@ export const ClockReadout = ({ clock, size = "lg" }: { clock: Clock; size?: "md"
           over ? "text-negative" : clock.status === "running" ? "text-ink" : "text-muted",
         )}
       >
-        <span className="sr-only">{over ? "Over time by " : "Time left "}</span>
-        {over ? `+${clockText(live.over)}` : clockText(live.remaining)}
+        <span className="sr-only">{ended ? "Time used " : over ? "Over time by " : "Time left "}</span>
+        {ended ? clockText(live.elapsed) : over ? `+${clockText(live.over)}` : clockText(live.remaining)}
       </Figure>
       <span className="text-xs text-faint">
-        {over
-          ? `over the ${durationText(clock.durationSeconds)} planned`
-          : clock.status === "scheduled"
-            ? `planned, not started`
-            : `left of ${durationText(clock.durationSeconds)}`}
+        {ended
+          ? `used of ${durationText(clock.durationSeconds)}`
+          : over
+            ? `over the ${durationText(clock.durationSeconds)} planned`
+            : clock.status === "scheduled"
+              ? `planned, not started`
+              : `left of ${durationText(clock.durationSeconds)}`}
       </span>
     </div>
   );

@@ -605,9 +605,16 @@ export const RoomScreen = ({
               clock.over > 0 ? "text-negative" : session.status === "running" ? "text-ink" : "text-muted",
             )}
           >
-            <span className="sr-only">{clock.over > 0 ? "Over time by " : "Time left "}</span>
-            {clock.over > 0 ? `+${clockText(clock.over)}` : clockText(clock.remaining)}
+            <span className="sr-only">
+              {session.status === "ended" ? "Time used " : clock.over > 0 ? "Over time by " : "Time left "}
+            </span>
+            {session.status === "ended"
+              ? clockText(clock.elapsed)
+              : clock.over > 0
+                ? `+${clockText(clock.over)}`
+                : clockText(clock.remaining)}
           </Figure>
+          {session.status === "ended" && <span className="-ml-1.5 text-xs text-faint">used</span>}
           <StatusPill status={session.status} />
           <AiPill policy={session.aiPolicy} />
           {session.isSample && <Pill>Sample</Pill>}
