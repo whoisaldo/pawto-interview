@@ -13,9 +13,11 @@ from typing import NamedTuple
 
 from fastapi import HTTPException, Query, WebSocket, WebSocketException, status
 
-from app.core.auth import TokenError, clerk_user_id
+from app.core.auth import TokenError, authenticated_user_id
+from app.dao.interviews import InterviewDAO
 from app.dao.rooms import RoomDAO
 from app.dao.users import UserDAO
+from app.services.interviews import role_in
 from app.services.rooms import get_active_room
 
 logger = logging.getLogger(__name__)
@@ -44,7 +46,7 @@ async def room_participant(
         )
 
     try:
-        user_id = await clerk_user_id(token)
+        user_id = await authenticated_user_id(token)
     except TokenError as exc:
         # %r: the room id comes from the URL, and a decoded newline would
         # otherwise let a caller write a log line of their own.
@@ -71,5 +73,14 @@ async def room_participant(
         raise WebSocketException(
             code=status.WS_1008_POLICY_VIOLATION, reason=exc.detail
         ) from exc
+
+    # A practice room is open to anyone holding its id. An interview room is
+    # for its interviewers and the one candidate who redeemed its invite.
+    session = await InterviewDAO(pool).get_by_room(room_id)
+    if session is not None and role_in(session, user_id) is None:
+        logger.info("Refused %s access to interview room %r", user_id, room_id)
+        raise WebSocketException(
+            code=status.WS_1008_POLICY_VIOLATION, reason="Not part of this interview"
+        )
 
     return Participant(user_id=user_id, display_name=user["name"] or "Someone")

@@ -80,13 +80,14 @@ class ProblemDAO:
 
     async def get_judge_spec(self, problem_id: UUID) -> dict:
         """Everything the runner needs, hidden tests included."""
-        query = "SELECT tests, time_limit_ms, mem_limit_mb FROM problems WHERE id = $1"
+        query = "SELECT tests, time_limit_ms, mem_limit_mb, judge_all_tests FROM problems WHERE id = $1"
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(query, problem_id)
         return {
             "tests": json.loads(row["tests"]),
             "timeLimitMs": row["time_limit_ms"],
             "memLimitMb": row["mem_limit_mb"],
+            "stopOnFailure": not row["judge_all_tests"],
         }
 
     async def get_analysis_spec(self, problem_id: UUID) -> dict | None:

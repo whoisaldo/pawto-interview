@@ -3,11 +3,13 @@ from __future__ import annotations
 import asyncpg
 from fastapi import HTTPException, status
 
+from app.dao.interviews import InterviewDAO
 from app.dao.problems import ProblemDAO
 from app.dao.room_members import RoomMemberDAO
 from app.dao.rooms import RoomDAO
 from app.dao.submissions import SubmissionDAO
 from app.dao.users import UserDAO
+from app.services.interviews import CANDIDATE, RunVisibility, role_in
 from app.services.rooms import ensure_room_member, get_active_room
 
 # The runner executes with the Python interpreter it ships with. Other
@@ -29,12 +31,16 @@ class SubmissionService:
         room_member_dao: RoomMemberDAO,
         problem_dao: ProblemDAO,
         user_dao: UserDAO,
+        interview_dao: InterviewDAO,
+        visibility: RunVisibility,
     ) -> None:
         self.submission_dao = submission_dao
         self.room_dao = room_dao
         self.room_member_dao = room_member_dao
         self.problem_dao = problem_dao
         self.user_dao = user_dao
+        self.interview_dao = interview_dao
+        self.visibility = visibility
 
     async def submit(
         self,
@@ -57,6 +63,7 @@ class SubmissionService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Join the room to run code in it",
             )
+        await self._check_interview(room_id, user_id, problem_id)
         if await self.submission_dao.count_created_since(user_id, 3600) >= RUNS_PER_HOUR:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -88,6 +95,30 @@ class SubmissionService:
                 detail="Wait for your current run to finish",
             ) from exc
 
+    async def _check_interview(self, room_id: str, user_id: str, problem_id) -> None:
+        """An interview room runs its session's problem, on its session's clock."""
+        session = await self.interview_dao.get_by_room(room_id)
+        if session is None:
+            return
+        role = role_in(session, user_id)
+        if role is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not part of this interview",
+            )
+        if session["problemId"] != problem_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This interview is set to a different problem",
+            )
+        # The interviewer can try a run at any time. The candidate's runs
+        # belong to the time they were given.
+        if role == CANDIDATE and session["status"] != "running":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Runs are open while the session is running",
+            )
+
     async def get_submission(self, submission_id, caller_id: str) -> dict:
         submission = await self.submission_dao.get_by_id(submission_id)
         if not submission:
@@ -97,7 +128,7 @@ class SubmissionService:
             )
         room = await get_active_room(self.room_dao, submission["roomId"])
         await ensure_room_member(self.room_member_dao, room, caller_id)
-        return submission
+        return await self.visibility.one(submission, caller_id)
 
     async def request_analysis(self, submission_id, caller_id: str) -> dict:
         submission = await self.submission_dao.get_by_id(submission_id)
@@ -152,5 +183,7 @@ class SubmissionService:
         room = await get_active_room(self.room_dao, room_id)
         await ensure_room_member(self.room_member_dao, room, caller_id)
         if user_id:
-            return await self.submission_dao.list_by_room_and_user(room_id, user_id)
-        return await self.submission_dao.list_by_room(room_id)
+            submissions = await self.submission_dao.list_by_room_and_user(room_id, user_id)
+        else:
+            submissions = await self.submission_dao.list_by_room(room_id)
+        return await self.visibility.many(room_id, submissions, caller_id)

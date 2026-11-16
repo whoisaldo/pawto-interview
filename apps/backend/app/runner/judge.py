@@ -81,7 +81,19 @@ def _outcome(index: int, test: dict, passed: bool, elapsed: int, stdout: bytes, 
     return TestOutcome(index, False, passed, elapsed, _clip(stdout), _clip(stderr))
 
 
-def judge(code: str, tests: list[dict], time_limit_ms: int, mem_limit_mb: int) -> Verdict:
+def judge(
+    code: str,
+    tests: list[dict],
+    time_limit_ms: int,
+    mem_limit_mb: int,
+    stop_on_failure: bool = True,
+) -> Verdict:
+    """Judge `code` against `tests`.
+
+    A practice run stops at the first failing test. With `stop_on_failure`
+    off every test runs and is reported, and the status is that of the first
+    one that failed: what an interview needs to show each case by name.
+    """
     # A problem with no tests would otherwise accept anything.
     status = ACCEPTED if tests else RUNTIME_ERROR
     verdict = Verdict(status=status, timeMs=0, passed=0, total=len(tests))
@@ -106,8 +118,11 @@ def judge(code: str, tests: list[dict], time_limit_ms: int, mem_limit_mb: int) -
                 verdict.tests.append(
                     _outcome(index, test, False, elapsed, exc.stdout or b"", exc.stderr or b"")
                 )
-                verdict.status = TIME_LIMIT_EXCEEDED
-                break
+                if verdict.status == ACCEPTED:
+                    verdict.status = TIME_LIMIT_EXCEEDED
+                if stop_on_failure:
+                    break
+                continue
 
             elapsed = int((time.perf_counter() - started) * 1000)
             if not test.get("hidden"):
@@ -123,8 +138,10 @@ def judge(code: str, tests: list[dict], time_limit_ms: int, mem_limit_mb: int) -
             if passed:
                 verdict.passed += 1
                 continue
-            verdict.status = RUNTIME_ERROR if completed.returncode != 0 else WRONG_ANSWER
-            break
+            if verdict.status == ACCEPTED:
+                verdict.status = RUNTIME_ERROR if completed.returncode != 0 else WRONG_ANSWER
+            if stop_on_failure:
+                break
 
     return verdict
 
@@ -142,5 +159,11 @@ if __name__ == "__main__":
     ctypes.CDLL(None).prctl(PR_SET_DUMPABLE, 0)
 
     spec = json.load(sys.stdin)
-    result = judge(spec["code"], spec["tests"], spec["timeLimitMs"], spec["memLimitMb"])
+    result = judge(
+        spec["code"],
+        spec["tests"],
+        spec["timeLimitMs"],
+        spec["memLimitMb"],
+        spec.get("stopOnFailure", True),
+    )
     print(json.dumps(result.as_dict()))

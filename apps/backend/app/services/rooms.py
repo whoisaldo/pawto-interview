@@ -84,6 +84,7 @@ class RoomService:
         room_update_dao: RoomUpdateDAO,
         event_dao: EventDAO,
         submission_dao: SubmissionDAO,
+        visibility,
     ) -> None:
         self.room_dao = room_dao
         self.room_member_dao = room_member_dao
@@ -92,6 +93,9 @@ class RoomService:
         self.room_update_dao = room_update_dao
         self.event_dao = event_dao
         self.submission_dao = submission_dao
+        # app.services.interviews.RunVisibility: an interview room's replay
+        # holds back what its candidate has not been shown.
+        self.visibility = visibility
 
     async def create_room(
         self, name: str, description: str | None, created_by: str, visibility: str, advertised: bool
@@ -141,7 +145,9 @@ class RoomService:
                 for u in await self.room_update_dao.list_for_room(room_id)
             ],
             "events": await self.event_dao.list_for_room(room_id),
-            "submissions": await self.submission_dao.list_by_room(room_id),
+            "submissions": await self.visibility.many(
+                room_id, await self.submission_dao.list_by_room(room_id), caller_id
+            ),
         }
 
     async def list_room_members(self, room_id: str, caller_id: str) -> list[dict]:

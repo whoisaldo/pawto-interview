@@ -100,3 +100,32 @@ def test_hidden_test_timing_is_not_reported():
     verdict = judge("import time\ntime.sleep(0.2)\na, b = map(int, input().split())\nprint(a + b)\n", TESTS, 2000, 256)
     assert verdict.tests[1].hidden and verdict.tests[1].timeMs == 0
     assert verdict.timeMs == verdict.tests[0].timeMs
+
+
+def test_every_test_can_be_judged_past_a_failure():
+    """An interview reports each case; the status is still the first failure's."""
+    tests = [
+        {"input": "1 1\n", "expected": "2", "hidden": False},
+        {"input": "2 3\n", "expected": "6", "hidden": False},
+        {"input": "boom\n", "expected": "0", "hidden": True},
+        {"input": "10 -4\n", "expected": "6", "hidden": True},
+    ]
+    stopped = judge(ADD, tests, 2000, 256)
+    assert len(stopped.tests) == 2
+
+    verdict = judge(ADD, tests, 2000, 256, stop_on_failure=False)
+    assert [outcome.passed for outcome in verdict.tests] == [True, False, False, True]
+    assert (verdict.status, verdict.passed, verdict.total) == (WRONG_ANSWER, 2, 4)
+    # Judging on does not loosen what a hidden test gives away.
+    assert (verdict.tests[2].stdout, verdict.tests[2].stderr, verdict.tests[2].timeMs) == ("", "", 0)
+
+
+def test_a_slow_test_does_not_end_a_full_judging():
+    tests = [
+        {"input": "slow\n", "expected": "x", "hidden": False},
+        {"input": "fast\n", "expected": "fast", "hidden": False},
+    ]
+    code = "import time\nline = input()\nif line == 'slow':\n    time.sleep(5)\nprint(line)\n"
+    verdict = judge(code, tests, 300, 256, stop_on_failure=False)
+    assert verdict.status == TIME_LIMIT_EXCEEDED
+    assert [outcome.passed for outcome in verdict.tests] == [False, True]

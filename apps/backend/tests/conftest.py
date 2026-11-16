@@ -59,6 +59,10 @@ async def _settle_runs(pool) -> None:
         await conn.execute(
             "UPDATE submissions SET analysis_status = 'failed' WHERE analysis_status IN ('pending', 'running')"
         )
+        # One assistant question in flight per person holds across sessions too.
+        await conn.execute(
+            "UPDATE interview_ai_turns SET status = 'failed', finished_at = NOW() WHERE status = 'running'"
+        )
 
 
 @pytest.fixture(autouse=True)
@@ -104,3 +108,18 @@ def room(client, signed_up):
     )
     assert response.status_code == 200, response.text
     return response.json()
+
+
+@pytest.fixture
+def operators(monkeypatch, signed_up):
+    """Alice runs interviews. Bob and Carol can only ever be candidates."""
+    signed_up("user_alice", "user_bob", "user_carol")
+    monkeypatch.setattr("app.core.config.INTERVIEW_OPERATOR_IDS", frozenset({"user_alice"}))
+
+
+@pytest.fixture
+def interview(client, operators):
+    """A scheduled session on the interview exercise, with AI allowed."""
+    from tests.interview_rig import create_interview
+
+    return create_interview(client)

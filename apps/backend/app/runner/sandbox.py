@@ -81,9 +81,20 @@ def _run_in_container(image: str, source: str, spec: dict, mem_limit_mb: int, ti
 
 
 def judge_in_container(
-    image: str, code: str, tests: list[dict], time_limit_ms: int, mem_limit_mb: int
+    image: str,
+    code: str,
+    tests: list[dict],
+    time_limit_ms: int,
+    mem_limit_mb: int,
+    stop_on_failure: bool = True,
 ) -> Verdict:
-    spec = {"code": code, "tests": tests, "timeLimitMs": time_limit_ms, "memLimitMb": mem_limit_mb}
+    spec = {
+        "code": code,
+        "tests": tests,
+        "timeLimitMs": time_limit_ms,
+        "memLimitMb": mem_limit_mb,
+        "stopOnFailure": stop_on_failure,
+    }
     timeout = len(tests) * time_limit_ms / 1000 + STARTUP_ALLOWANCE_SECONDS
     data = _run_in_container(image, JUDGE_SOURCE, spec, mem_limit_mb, timeout)
     if data is None:

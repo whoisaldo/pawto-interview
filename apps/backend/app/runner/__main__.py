@@ -35,10 +35,14 @@ SANDBOX_IMAGE = os.getenv("SANDBOX_IMAGE")
 ALLOW_UNSANDBOXED = os.getenv("ALLOW_UNSANDBOXED", "").lower() in {"1", "true", "yes"}
 
 
-def run_judge(code: str, tests: list[dict], time_limit_ms: int, mem_limit_mb: int) -> Verdict:
+def run_judge(
+    code: str, tests: list[dict], time_limit_ms: int, mem_limit_mb: int, stop_on_failure: bool = True
+) -> Verdict:
     if SANDBOX_IMAGE:
-        return sandbox.judge_in_container(SANDBOX_IMAGE, code, tests, time_limit_ms, mem_limit_mb)
-    return judge(code, tests, time_limit_ms, mem_limit_mb)
+        return sandbox.judge_in_container(
+            SANDBOX_IMAGE, code, tests, time_limit_ms, mem_limit_mb, stop_on_failure
+        )
+    return judge(code, tests, time_limit_ms, mem_limit_mb, stop_on_failure)
 
 
 def run_analysis(code: str, generator: str, mem_limit_mb: int) -> dict:
@@ -84,7 +88,12 @@ async def judge_next(submissions: SubmissionDAO, problems: ProblemDAO) -> bool:
     try:
         spec = await problems.get_judge_spec(submission["problemId"])
         verdict = await asyncio.to_thread(
-            run_judge, submission["code"] or "", spec["tests"], spec["timeLimitMs"], spec["memLimitMb"]
+            run_judge,
+            submission["code"] or "",
+            spec["tests"],
+            spec["timeLimitMs"],
+            spec["memLimitMb"],
+            spec["stopOnFailure"],
         )
     except Exception:
         # The judge, not the program, failed. The row must not stay "running"

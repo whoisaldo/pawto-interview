@@ -6,6 +6,7 @@ import time
 import asyncpg
 from fastapi import HTTPException, status
 
+from app.core import demo_auth
 from app.core.clerk import ClerkProfileError, fetch_profile
 from app.dao.users import UserDAO
 
@@ -25,6 +26,15 @@ class UserService:
 
     async def sync_user(self, user_id: str) -> dict:
         """Mirror Clerk's copy of the caller into our users table."""
+        if demo_auth.enabled():
+            # Demo users are created when their token is issued, and there is
+            # no Clerk to ask about them.
+            user = await self.user_dao.get_by_id(user_id)
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail=f"User not found: {user_id}"
+                )
+            return user
         if time.monotonic() - _last_synced.get(user_id, float("-inf")) < SYNC_INTERVAL_SECONDS:
             user = await self.user_dao.get_by_id(user_id)
             if user:

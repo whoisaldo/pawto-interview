@@ -14,7 +14,10 @@ from uuid import UUID
 import asyncpg
 
 from app.core.config import DATABASE_URL
+from app.dao.interviews import InterviewDAO
+from app.dao.problems import ProblemDAO
 from app.dao.submissions import JUDGED_CHANNEL, SubmissionDAO
+from app.services.interviews import RunVisibility
 from app.websocket.room_chat import RoomChatManager
 
 logger = logging.getLogger(__name__)
@@ -25,6 +28,7 @@ RECONNECT_SECONDS = 2.0
 class VerdictListener:
     def __init__(self, pool: asyncpg.Pool, chat: RoomChatManager) -> None:
         self.submissions = SubmissionDAO(pool)
+        self.visibility = RunVisibility(InterviewDAO(pool), ProblemDAO(pool))
         self.chat = chat
         self.conn: asyncpg.Connection | None = None
         self.stopping = False
@@ -66,4 +70,7 @@ class VerdictListener:
         if submission is None:
             logger.warning("Judged submission %s not found", payload)
             return
+        # In an interview room this goes to the candidate too, so held-back
+        # results are left out; the interviewer's screen reads them over HTTP.
+        submission = await self.visibility.one(submission, None)
         await self.chat.broadcast(submission["roomId"], {"type": "submission", "submission": submission})

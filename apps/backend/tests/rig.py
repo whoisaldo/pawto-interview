@@ -50,6 +50,9 @@ ISSUER = f"http://127.0.0.1:{_jwks_server.server_address[1]}"
 
 # Set before app.core.config is imported anywhere, since it reads the
 # environment exactly once.
+# Pinned, so a developer's .env set up for a demonstration cannot switch the
+# suite's sign-in. The demo-mode tests turn it on for themselves.
+os.environ["AUTH_MODE"] = "clerk"
 os.environ["CLERK_ISSUER"] = ISSUER
 os.environ["CLERK_AUTHORIZED_PARTIES"] = ORIGIN
 os.environ["CLERK_SECRET_KEY"] = "sk_test_stubbed_in_tests"

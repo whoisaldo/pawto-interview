@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
 
-from app.dependencies import current_user_id, get_submission_service
+from app.dependencies import current_user_id, get_run_visibility, get_submission_service
 from app.schemas.submissions import SubmissionResponse, SubmitRequest
 from app.services.submissions import SubmissionService
 
@@ -52,8 +52,11 @@ async def request_analysis(
 ) -> SubmissionResponse:
     submission = await service.request_analysis(submission_id, caller_id)
     # Everyone in the room sees it start; the result follows from the listener.
+    # A broadcast reaches every seat, so it carries no more than the most
+    # restricted one may see.
     await request.app.state.room_chat_manager.broadcast(
-        submission["roomId"], {"type": "submission", "submission": submission}
+        submission["roomId"],
+        {"type": "submission", "submission": await get_run_visibility(request).one(submission, None)},
     )
     return SubmissionResponse.model_validate(submission)
 
