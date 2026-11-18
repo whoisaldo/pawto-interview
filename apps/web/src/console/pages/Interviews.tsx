@@ -6,7 +6,7 @@ import { Plus } from "lucide-react";
 import { useConsole } from "../context";
 import type { SessionSummary } from "../api";
 import { useStored } from "../hooks";
-import { ClockCell, SessionCell } from "../parts/rows";
+import { SessionCell } from "../parts/rows";
 import { buttonClass, cn } from "../classes";
 import {
   AiPill,
@@ -34,7 +34,6 @@ const Rows = ({ sessions }: { sessions: SessionSummary[] }) => (
           <th className={thClass}>Session</th>
           <th className={thClass}>Problem</th>
           <th className={thClass}>Status</th>
-          <th className={cn(thClass, "text-right")}>Clock</th>
           <th className={thClass}>AI</th>
           <th className={thClass}>Candidate</th>
           <th className={thClass}>
@@ -51,9 +50,6 @@ const Rows = ({ sessions }: { sessions: SessionSummary[] }) => (
             <td className={cn(tdClass, "max-w-60 truncate text-muted")}>{session.problemTitle}</td>
             <td className={tdClass}>
               <StatusPill status={session.status} />
-            </td>
-            <td className={cn(tdClass, "text-right whitespace-nowrap")}>
-              <ClockCell session={session} />
             </td>
             <td className={tdClass}>
               <AiPill policy={session.aiPolicy} />

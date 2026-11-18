@@ -94,14 +94,13 @@ INTERVIEW_OPERATOR_IDS = frozenset(
     user_id.strip() for user_id in os.getenv("INTERVIEW_OPERATOR_IDS", "").split(",") if user_id.strip()
 )
 
-# The Claude CLI behind the interview assistant. Unset, the assistant is off
+# The Codex CLI behind the interview assistant. Unset, the assistant is off
 # and says so; there is no other model and no canned reply to fall back to.
-# The command is a launcher that picks its own profile (or CLAUDE_CLI_CONFIG_DIR
-# names one). See app.assistant.cli for what is passed to it.
-CLAUDE_CLI_COMMAND = os.getenv("CLAUDE_CLI_COMMAND", "").strip()
-CLAUDE_CLI_CONFIG_DIR = os.getenv("CLAUDE_CLI_CONFIG_DIR", "").strip()
-CLAUDE_CLI_MODEL = os.getenv("CLAUDE_CLI_MODEL", "").strip()
-CLAUDE_CLI_EFFORT = os.getenv("CLAUDE_CLI_EFFORT", "").strip()
+# See app.assistant.cli for the flags passed to the executable.
+CODEX_CLI_COMMAND = os.getenv("CODEX_CLI_COMMAND", "").strip()
+CODEX_CLI_CONFIG_DIR = os.getenv("CODEX_CLI_CONFIG_DIR", "").strip()
+CODEX_CLI_MODEL = os.getenv("CODEX_CLI_MODEL", "").strip()
+CODEX_CLI_EFFORT = os.getenv("CODEX_CLI_EFFORT", "").strip()
 # The one directory the CLI is ever started in. Created empty if missing.
-CLAUDE_CLI_WORKDIR = os.getenv("CLAUDE_CLI_WORKDIR", "").strip()
-CLAUDE_CLI_TIMEOUT_SECONDS = os.getenv("CLAUDE_CLI_TIMEOUT_SECONDS", "").strip()
+CODEX_CLI_WORKDIR = os.getenv("CODEX_CLI_WORKDIR", "").strip()
+CODEX_CLI_TIMEOUT_SECONDS = os.getenv("CODEX_CLI_TIMEOUT_SECONDS", "").strip()

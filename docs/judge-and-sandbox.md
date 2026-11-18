@@ -45,3 +45,5 @@ The result is an estimate, and the app says so. Nothing about it affects the ver
 ## Reporting a problem with it
 
 A way out of the sandbox, or a way to see or change other people's runs, is a security issue. Report it privately as described in [SECURITY.md](../SECURITY.md).
+
+A local runner on a slow Docker host can set `SANDBOX_STARTUP_ALLOWANCE_SECONDS`. This only changes the host's allowance for container overhead. Per-test limits and container isolation still apply.

@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Clock } from "./api";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { errorMessage } from "./api";
 
 export interface Resource<T> {
@@ -63,48 +62,6 @@ export const useResource = <T>(key: string, load: () => Promise<T>, pollMs?: num
   const setData = useCallback((data: T) => setState({ key, data, error: null, loaded: true }), [key]);
 
   return { data: current.data, error: current.error, loading: !current.loaded, reload, setData };
-};
-
-/** The current time, re-read on an interval, for anything that counts. */
-export const useNow = (intervalMs = 500): number => {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(timer);
-  }, [intervalMs]);
-  return now;
-};
-
-export interface LiveClock {
-  elapsed: number;
-  remaining: number;
-  /** Seconds past the planned length, or 0. */
-  over: number;
-  fraction: number;
-}
-
-/**
- * A session's clock, counted locally between answers from the server.
- *
- * The server sends how much time was used when it answered. While the
- * session runs, this adds the time since that answer arrived, so the display
- * does not depend on this machine's clock agreeing with the server's.
- */
-export const useLiveClock = (clock: Clock | undefined): LiveClock => {
-  const serverNow = clock?.serverNow;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const receivedAt = useMemo(() => Date.now(), [serverNow]);
-  const now = useNow(clock?.status === "running" ? 250 : 2000);
-  if (!clock) return { elapsed: 0, remaining: 0, over: 0, fraction: 0 };
-  const since = clock.status === "running" ? Math.max(0, (now - receivedAt) / 1000) : 0;
-  const elapsed = clock.elapsedSeconds + since;
-  const remaining = clock.durationSeconds - elapsed;
-  return {
-    elapsed,
-    remaining: Math.max(0, remaining),
-    over: Math.max(0, -remaining),
-    fraction: Math.min(1, elapsed / clock.durationSeconds),
-  };
 };
 
 /** A value kept in localStorage, for small choices that should survive a reload. */

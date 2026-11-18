@@ -69,6 +69,7 @@ export const TurnBlock = ({
   configuredModel,
   streamingText,
   thinking,
+  compact = false,
 }: {
   turn: Turn;
   viewer: Role;
@@ -76,6 +77,7 @@ export const TurnBlock = ({
   /** While this turn is being answered here, the text so far. */
   streamingText?: string;
   thinking?: boolean;
+  compact?: boolean;
 }) => {
   const live = turn.status === "running";
   const text = live ? (streamingText ?? "") : turn.answer;
@@ -83,32 +85,40 @@ export const TurnBlock = ({
   const asker =
     turn.askedAs === viewer ? "You" : turn.askedAs === "candidate" ? (turn.userName ?? "Candidate") : "Interviewer";
   return (
-    <article className="space-y-2 px-4 py-3.5">
+    <article className="space-y-2 px-4 py-3">
       <header className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
         <span className="font-medium text-ink">{asker}</span>
-        {viewer === "interviewer" && (
+        {viewer === "interviewer" && !compact && (
           <Pill>{turn.askedAs === "candidate" ? "Candidate" : "Interviewer"}</Pill>
         )}
-        <Figure className="text-xs text-faint">{timeOfDay(turn.createdAt)}</Figure>
+        {!compact && <Figure className="text-xs text-faint">{timeOfDay(turn.createdAt)}</Figure>}
       </header>
       <p className="text-pretty break-words whitespace-pre-wrap text-ink">{turn.question}</p>
-      <ContextSent turn={turn} />
+      {!compact && <ContextSent turn={turn} />}
 
-      <div className="border-l border-control pl-3">
+      <div className={compact ? "space-y-1" : "border-l border-control pl-3"}>
+        {compact && text && <p className="text-xs font-medium text-muted">Codex</p>}
         {text && <Answer text={text} streaming={live} />}
         {live && !text && (
           <p className="text-muted" aria-live="polite">
-            {thinking ? "Claude is thinking." : "Waiting for Claude."}
+            {thinking ? "Working…" : "Sending…"}
           </p>
         )}
         {note && (
           <Note tone={note.tone} className={text ? "mt-2" : undefined}>
-            {note.text}
-            {turn.error ? ` ${turn.error}` : ""}
+            {compact && turn.status === "failed" ? (turn.error ?? "Codex could not answer.") : [note.text, turn.error].filter(Boolean).join(" ")}
           </Note>
         )}
       </div>
-      {!live && <UsageLine turn={turn} configuredModel={configuredModel} />}
+      {!live && (compact ? (
+        <details className="text-xs text-faint">
+          <summary className="w-fit cursor-pointer rounded-sm">Details</summary>
+          <div className="mt-1 space-y-0.5">
+            <ContextSent turn={turn} />
+            <UsageLine turn={turn} configuredModel={configuredModel} />
+          </div>
+        </details>
+      ) : <UsageLine turn={turn} configuredModel={configuredModel} />)}
     </article>
   );
 };
@@ -121,8 +131,8 @@ export const UsageTotal = ({ turns }: { turns: Turn[] }) => {
     <p className="text-xs text-faint">
       <Figure>{turns.length}</Figure> {turns.length === 1 ? "question" : "questions"} ·{" "}
       <Figure>{countText(sum(sentTokens))}</Figure> in,{" "}
-      <Figure>{countText(sum((turn) => turn.usage.outputTokens))}</Figure> out tokens ·{" "}
-      <Figure>{usdText(cost)}</Figure> at list price
+      <Figure>{countText(sum((turn) => turn.usage.outputTokens))}</Figure> out tokens
+      {turns.some((turn) => turn.usage.costUsd !== null) && <> · <Figure>{usdText(cost)}</Figure> at list price</>}
     </p>
   );
 };

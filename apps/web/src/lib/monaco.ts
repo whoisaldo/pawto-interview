@@ -11,6 +11,7 @@ if (localMonaco) {
 }
 
 export const EDITOR_THEME = "tandem";
+export const INTERVIEW_EDITOR_THEME = "interview";
 
 // vs-dark on the page's charcoal, so the editor sits flush inside its card.
 export const defineEditorTheme: BeforeMount = (monaco) => {
@@ -25,6 +26,20 @@ export const defineEditorTheme: BeforeMount = (monaco) => {
       "editorLineNumber.activeForeground": "#a1a1aa",
       "editorCursor.foreground": "#f97316",
       "editor.selectionBackground": "#f9731640",
+    },
+  });
+  monaco.editor.defineTheme(INTERVIEW_EDITOR_THEME, {
+    base: "vs",
+    inherit: true,
+    rules: [],
+    colors: {
+      "editor.background": "#ffffff",
+      "editor.lineHighlightBackground": "#f3f5f6",
+      "editorLineNumber.foreground": "#5e6976",
+      "editorLineNumber.activeForeground": "#161b22",
+      "editorGutter.background": "#ffffff",
+      "editor.selectionBackground": "#d8e8fb",
+      "editorCursor.foreground": "#1d5fbf",
     },
   });
 };

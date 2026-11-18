@@ -1,6 +1,6 @@
 """The interview assistant: who may ask, what is sent, and what is kept.
 
-A question goes to the Claude CLI (app.assistant.cli) only when the session
+A question goes to the Codex CLI (app.assistant.cli) only when the session
 allows AI, the asker is part of the session, and the asker chose what to
 attach. Every question is stored with its context sizes and its usage, where
 the interviewer can read it.
@@ -50,7 +50,7 @@ You can see only what is attached to this message. The problem, the code and the
 CANDIDATE_NOTE = "\n\nYou are talking with the candidate. You have not seen any held-back test case, and you should not guess at them."
 INTERVIEWER_NOTE = "\n\nYou are talking with the interviewer, who is trying the assistant out."
 
-GENERIC_FAILURE = "The assistant could not answer. Your interviewer can see the details."
+GENERIC_FAILURE = "Codex could not answer. Try again."
 
 
 def _clip(text: str, limit: int) -> str:
@@ -448,7 +448,7 @@ class AssistantService:
         hub.reload()
         if hub.settings is None:
             return {"ok": False, "status": "not_configured" if not hub.problem else "misconfigured",
-                    "error": hub.problem or "CLAUDE_CLI_COMMAND is not set", "answer": "", "usage": None}
+                    "error": hub.problem or "CODEX_CLI_COMMAND is not set", "answer": "", "usage": None}
         if hub.busy:
             raise _unavailable("busy", "The assistant is busy. Try again in a moment.", status.HTTP_429_TOO_MANY_REQUESTS)
         hub.testing = True

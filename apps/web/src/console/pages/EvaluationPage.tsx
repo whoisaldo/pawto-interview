@@ -5,7 +5,7 @@ import { Link, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { useConsole } from "../context";
 import { interviewApi } from "../api";
-import { clockText, timeOfDay, usdText } from "../format";
+import { timeOfDay } from "../format";
 import { useResource } from "../hooks";
 import { EvidenceForm } from "../parts/evidence";
 import { RunLine } from "../parts/runs";
@@ -61,16 +61,13 @@ const EvaluationPage = () => {
           {session.isSample && <SampleTag />}
         </div>
         <p className="mt-1.5 text-sm text-muted">
-          {session.candidateName} · {session.problemTitle} ·{" "}
-          <Figure>{clockText(session.elapsedSeconds)}</Figure> used of{" "}
-          <Figure>{clockText(session.durationSeconds)}</Figure>
-          {session.status !== "ended" && " · this session has not ended"}
+          {session.candidateName} · {session.problemTitle}
         </p>
       </header>
 
       <div className="grid items-start gap-6 xl:grid-cols-[1fr_minmax(0,24rem)]">
         <Panel>
-          <PanelHeader title="Evidence" detail="What you observed, not what the tests did" />
+          <PanelHeader title="Evidence" />
           <div className="p-5 text-body">
             {rubric.data && evaluation.data ? (
               <EvidenceForm
@@ -125,7 +122,7 @@ const EvaluationPage = () => {
               detail={
                 session.aiPolicy === "disabled"
                   ? "Off for this session"
-                  : `${asked.length} asked by the candidate · ${usdText(session.assistant.costUsd)}`
+                  : `${asked.length} asked by the candidate`
               }
               actions={
                 <Link to={`/console/interviews/${id}?tab=assistant`} className={buttonClass("ghost", "sm")}>

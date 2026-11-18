@@ -6,7 +6,7 @@ import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { MonacoBinding } from "y-monaco";
 import { WS_BASE_URL } from "../lib/config";
-import { EDITOR_THEME, defineEditorTheme } from "../lib/monaco";
+import { EDITOR_THEME, INTERVIEW_EDITOR_THEME, defineEditorTheme } from "../lib/monaco";
 
 interface Props {
   roomId: string;
@@ -29,6 +29,7 @@ interface Props {
   height?: string;
   readOnly?: boolean;
   fontSize?: number;
+  interviewMode?: boolean;
   // Where this browser keeps its own copy of the text. The relay keeps none,
   // so without this a lone person who reloads comes back to the starter.
   draftKey?: string;
@@ -90,6 +91,7 @@ const CollaborativeEditor = ({
   height = "420px",
   readOnly = false,
   fontSize = 14,
+  interviewMode = false,
   draftKey,
   restoreToken,
   onRunShortcut,
@@ -269,10 +271,6 @@ const CollaborativeEditor = ({
     editorRef.current = editor;
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => onRunShortcutRef.current?.());
 
-    if (ydocRef.current && providerRef.current) {
-      createBinding(ydocRef.current, providerRef.current, editor);
-    }
-
     editor.onDidChangeModelContent(() => {
       const text = editor.getValue();
       onCodeChange(text);
@@ -287,6 +285,10 @@ const CollaborativeEditor = ({
         }
       }, DRAFT_SAVE_MS);
     });
+
+    if (ydocRef.current && providerRef.current) {
+      createBinding(ydocRef.current, providerRef.current, editor);
+    }
   };
 
   return (
@@ -295,12 +297,14 @@ const CollaborativeEditor = ({
       <Editor
         height={height}
         defaultLanguage="python"
-        theme={EDITOR_THEME}
+        theme={interviewMode ? INTERVIEW_EDITOR_THEME : EDITOR_THEME}
         beforeMount={defineEditorTheme}
         onMount={handleMount}
         options={{
           minimap: { enabled: false },
           fontSize,
+          ariaLabel: "Python code editor",
+          ...(interviewMode ? { lineHeight: 24, renderLineHighlight: "line" as const } : {}),
           readOnly,
           lineNumbers: "on",
           scrollBeyondLastLine: false,

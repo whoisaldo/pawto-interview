@@ -5,7 +5,7 @@ export const Brand = ({ scope }: { scope?: string }) => (
   <span className="flex items-center gap-2.5">
     <img src="/mascot.png" alt="" className="pixelated size-7" />
     <span className="flex flex-col leading-none">
-      <span className="text-base leading-none font-semibold text-ink">TandemCode</span>
+      <span className="text-base leading-none font-semibold text-ink">PawtoInterview</span>
       {scope && <span className="mt-1 text-xs text-faint">{scope}</span>}
     </span>
   </span>

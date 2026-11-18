@@ -1,12 +1,12 @@
 # Interviews
 
-An interview session is a room with a clock, one problem, an AI policy and an interviewer's evidence notes. The room keeps doing what a room does: the shared editor, chat, runs and replay. Everything an interviewer adds lives in its own tables, so a practice room is unchanged.
+An interview session is a room with one problem, an AI policy and an interviewer's evidence notes. The room keeps doing what a room does: the shared editor, chat, runs and replay. Everything an interviewer adds lives in its own tables, so a practice room is unchanged.
 
 The web app's interview screens are under `/console` for interviewers and `/c/<invite code>` for candidates.
 
 ## Who is who
 
-An interviewer creates sessions, runs the clock, sees every test case and the reference answer, and scores what they saw. With Clerk, the interviewers are the user ids listed in `INTERVIEW_OPERATOR_IDS`. With the list empty, nobody is one. `is_operator` in `app/core/auth.py` is the only place that decides.
+An interviewer creates sessions, starts, pauses and ends sessions, sees every test case and the reference answer, and scores what they saw. With Clerk, the interviewers are the user ids listed in `INTERVIEW_OPERATOR_IDS`. With the list empty, nobody is one. `is_operator` in `app/core/auth.py` is the only place that decides.
 
 A candidate is whoever redeems a session's invite code first. The code is in the invite link and is the candidate's whole credential, so `InterviewService.create` draws it from the operating system's random source. A second person arriving with the same link is refused. An interviewer who opens it is refused too, so they cannot take the seat by accident.
 
@@ -14,19 +14,17 @@ Anyone else asking about a session is told it does not exist. A guessed id confi
 
 An interview room is closed to everyone but its participants. `room_participant` in `app/websocket/auth.py` checks this for both websockets, which a practice room does not need.
 
-## The clock
+## Session states
 
-A session is scheduled, running, paused or ended. The database stores the time used before the current stretch and when that stretch began, and `SELECT_SESSION` in `app/dao/interviews.py` adds the two on read. Nothing ticks on the server, and a pause costs one write.
+Sessions are scheduled, running, paused or ended. The interviewer starts, pauses, resumes and ends them manually. Reset returns the session to Scheduled and hides held-back cases. Runs, assistant questions and evidence stay in the record.
 
-The clock does not end a session. When the time is used up the room says so on both sides and keeps counting how far over it is. The interviewer ends the session. Cutting someone off in the middle of a sentence is a decision for a person.
+The server still records session timestamps for existing API consumers and exports. The interview screens have no countdown or time limit controls.
 
-A reset puts the clock, the status and the held-back reveal back to the start. It keeps the runs, the assistant questions and the notes, because they happened.
-
-A candidate can edit, run and ask the assistant only while the session is running. The server enforces this for runs and for the assistant (`SubmissionService._check_interview` and `AssistantService.availability`). The editor's lock is in the browser only: the relay keeps no document and does not know who may type.
+A candidate can edit, run tests and ask Codex while the session is running. The server enforces this for runs and Codex. The editor applies its lock in the browser.
 
 ## Held-back cases
 
-A problem's hidden tests are, in an interview, the held-back cases. The judge runs them with every run. The candidate is shown the public examples with their output and is told how many cases are held back, and nothing else: not their inputs, not whether they passed, not how many failed. The interviewer sees all of it.
+Two Sum is preselected for new interviews. Its statement, starter and reference solution are defined in `V18__two_sum_interview.sql`. A problem's hidden tests are the held-back cases in an interview. The judge runs them with every run. The candidate is shown the public examples with their output and is told how many cases are held back, and nothing else: not their inputs, not whether they passed, not how many failed. The interviewer sees all of it.
 
 The interviewer can reveal the held-back cases once a run has been judged, and not before. The reveal is meant to follow an attempt.
 
@@ -46,26 +44,19 @@ Acceptance criteria, the interviewer's plan, the change request and the referenc
 
 A session either allows AI or does not. The choice has no default in the API: `CreateInterviewRequest` requires it. Both sides see the policy in the room, and it is on every list and in every export.
 
-With AI allowed, a participant can ask Claude from the room's sidebar. The answer comes from a Claude Code CLI that is already installed and signed in on the API's host. `app/assistant/cli.py` is the only code that starts it, and it holds to these rules:
+With AI allowed, a participant can ask Codex from the room's sidebar. `app/assistant/cli.py` runs the signed-in Codex CLI in a dedicated directory. It passes the prompt on stdin and starts Codex with read-only sandboxing, no approvals, disabled shell execution, and disabled plugins, connectors, hooks and subagents. It skips user and project configuration. Cancel, timeout and the response-size limit stop the process group.
 
-- The program and its arguments are a list handed to exec. The question and its context go in on stdin. No text a person typed is ever part of a command line.
-- The CLI runs with no tools, no MCP servers, no saved session and none of the profile's own instructions, skills or hooks. It can write an answer and do nothing else on the host.
-- It starts in one configured directory with an environment of a few named variables (`INHERITED_ENV`). The API's secrets are not among them.
-- It refuses a profile directory listed as reserved, and the default login of whoever runs the API is always reserved.
-- Each run has a deadline and a cap on what it may print. A run that is cancelled, late or over the cap has its whole process group killed.
-- There is one configured model. Nothing is substituted for it, and there is no stock reply. When the CLI is not set up, is set up wrongly, fails or times out, that is what the asker is told.
-
-The limits are constants at the top of `app/assistant/cli.py` and `app/services/assistant.py`.
+The web app receives status events and completed text messages as Codex emits them. The CLI reports token counts with the turn, and elapsed time is measured on the server. Per-turn dollar cost is unavailable through this connection.
 
 Only what the asker ticks is attached to a question: the problem, the editor's text, the latest test results. The server builds the problem and the test results itself, so a candidate's attachment cannot include a held-back case before the reveal. The editor's text is the one part the browser supplies, because the server keeps no copy of the document, and it is sent only when its box is ticked.
 
-Every question is stored in `interview_ai_turns` with what was attached, the model that answered, tokens, time and cost. The interviewer reads all of them. A candidate reads their own. The detail of a failure goes to the interviewer only.
+Every question is stored in `interview_ai_turns` with what was attached, the configured model, tokens and time. The interviewer reads all of them. A candidate reads their own. The interviewer can see sanitized failure details.
 
 The run belongs to a task of its own in the API process (`LiveTurn`), not to the request that asked. A browser that goes away cancels the run, and the turn is still recorded.
 
 ### Setting it up
 
-Four variables turn it on, described in `apps/backend/.env.example`: the command, the profile directory, the model and the working directory. Unset, the assistant is off and the room says so. `CLAUDE_CLI_COMMAND` can be the CLI itself or a launcher script that selects a profile. The Settings page has a button that asks the model for one word and reports what it used.
+Set the `CODEX_CLI_*` variables in `apps/backend/.env.example` for the executable, signed-in Codex home, model and isolated working directory. Settings includes a connection test.
 
 ## Evidence and export
 

@@ -2,22 +2,6 @@
 // in a table and the same clock in a header cannot disagree.
 
 /** 402 -> "6:42". Used for clocks, so it never rounds up. */
-export const clockText = (seconds: number): string => {
-  const whole = Math.max(0, Math.floor(seconds));
-  const hours = Math.floor(whole / 3600);
-  const minutes = Math.floor((whole % 3600) / 60);
-  const rest = String(whole % 60).padStart(2, "0");
-  return hours > 0 ? `${hours}:${String(minutes).padStart(2, "0")}:${rest}` : `${minutes}:${rest}`;
-};
-
-/** 420 -> "7 min", 5400 -> "1 h 30 min". Used for lengths people chose. */
-export const durationText = (seconds: number): string => {
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes} min`;
-  const rest = minutes % 60;
-  return rest === 0 ? `${Math.floor(minutes / 60)} h` : `${Math.floor(minutes / 60)} h ${rest} min`;
-};
-
 export const bytesText = (bytes: number): string =>
   bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
 

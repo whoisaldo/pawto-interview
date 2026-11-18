@@ -12,9 +12,8 @@ import type { AiPolicy, BriefEdit, LibraryProblem, RunView, SessionSummary, Sess
 import { useResource } from "../hooks";
 import { CaseList, Criteria, GuideView, SectionTitle, Statement } from "../parts/brief";
 import { EvidenceForm } from "../parts/evidence";
-import { PlanStrip } from "../parts/PlanStrip";
 import { RevealControl, RunDetail, RunLine } from "../parts/runs";
-import { ClockReadout, InviteLink, SessionControls } from "../parts/session";
+import { InviteLink, SessionControls } from "../parts/session";
 import { TurnBlock, UsageTotal } from "../parts/transcript";
 import { buttonClass, cn } from "../classes";
 import {
@@ -120,7 +119,7 @@ const AssistantTab = ({ view, turns, error }: { view: SessionView; turns: Turn[]
           {view.aiPolicy === "disabled"
             ? "AI assistance is off for this session. The candidate is not offered the assistant and cannot reach it."
             : assistant.state === "ready" || assistant.state === "not_running" || assistant.state === "ended"
-              ? `The candidate can ask Claude (${assistant.model}${assistant.effort ? `, ${assistant.effort} effort` : ""}) while the session runs. Only what they tick is attached.`
+              ? `The candidate can ask Codex (${assistant.model}${assistant.effort ? `, ${assistant.effort} effort` : ""}) while the session runs. Only what they tick is attached.`
               : assistant.detail}
         </p>
         {turns && turns.length > 0 && <UsageTotal turns={turns} />}
@@ -161,7 +160,6 @@ const SetupTab = ({
   const [title, setTitle] = useState(summary.title);
   const [candidateName, setCandidateName] = useState(summary.candidateName);
   const [candidateEmail, setCandidateEmail] = useState(summary.candidateEmail ?? "");
-  const [minutes, setMinutes] = useState(String(Math.round(summary.durationSeconds / 60)));
   const [aiPolicy, setAiPolicy] = useState<AiPolicy>(summary.aiPolicy);
   const [problemId, setProblemId] = useState(summary.problemId);
   const [statement, setStatement] = useState(view.problem.statement ?? "");
@@ -173,8 +171,6 @@ const SetupTab = ({
 
   const ended = summary.status === "ended";
   const problemLocked = summary.status !== "scheduled" || summary.runs.count > 0;
-  const length = Number(minutes);
-  const lengthError = !Number.isFinite(length) || length < 1 || length > 240 ? "Between 1 and 240 minutes." : null;
   const problemChanged = problemId !== summary.problemId;
 
   const useLibrary = () => {
@@ -185,7 +181,6 @@ const SetupTab = ({
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (lengthError) return;
     setBusy(true);
     setError(null);
     const lines = criteria.split("\n").map((line) => line.trim()).filter(Boolean);
@@ -204,7 +199,6 @@ const SetupTab = ({
         ...(ended
           ? {}
           : {
-              durationSeconds: Math.round(length * 60),
               aiPolicy,
               ...(problemChanged ? { problemId } : { brief }),
             }),
@@ -230,16 +224,6 @@ const SetupTab = ({
           </Field>
           <Field label="Candidate email" htmlFor="setup-email">
             <input id="setup-email" type="email" maxLength={254} value={candidateEmail} onChange={(event) => setCandidateEmail(event.target.value)} className={inputClass} />
-          </Field>
-          <Field label="Length in minutes" htmlFor="setup-minutes" error={lengthError}>
-            <input
-              id="setup-minutes"
-              inputMode="numeric"
-              disabled={ended}
-              value={minutes}
-              onChange={(event) => setMinutes(event.target.value.replace(/[^0-9]/g, ""))}
-              className={cn(inputClass, "w-24 font-figure")}
-            />
           </Field>
           <div className="space-y-1.5">
             <p className="text-body font-medium text-ink">AI assistance</p>
@@ -297,7 +281,7 @@ const SetupTab = ({
         ) : savedAt ? (
           <Note tone="positive">Saved</Note>
         ) : null}
-        <Button type="submit" variant="primary" disabled={busy || Boolean(lengthError)}>
+        <Button type="submit" variant="primary" disabled={busy}>
           {busy ? "Saving" : "Save changes"}
         </Button>
       </div>
@@ -413,7 +397,6 @@ const InterviewDetail = () => {
               </span>
             </p>
             <div className="mt-5 flex flex-wrap items-end gap-x-8 gap-y-4">
-              <ClockReadout clock={session} />
               <SessionControls session={session} onChanged={refresh} />
             </div>
           </div>
@@ -424,15 +407,10 @@ const InterviewDetail = () => {
             </div>
             <Link to={`/console/interviews/${session.id}/room`} className={buttonClass("secondary")}>
               <DoorOpen className="size-4" aria-hidden />
-              Open the room as interviewer
+              Open room
             </Link>
           </div>
         </div>
-        {details.interviewer?.guide?.timeline && (
-          <div className="border-t border-rule px-5 py-4">
-            <PlanStrip clock={session} phases={details.interviewer.guide.timeline} />
-          </div>
-        )}
       </Panel>
 
       <Panel>

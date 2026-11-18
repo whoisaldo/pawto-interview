@@ -12,11 +12,11 @@ const twMerge = extendTailwindMerge({ extend: { theme: { text: ["body"] } } });
 export const cn = (...inputs: ClassValue[]) => twMerge(clsx(inputs));
 
 const buttonBase =
-  "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full font-medium whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md font-medium whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50";
 
 const buttonVariants = {
   // Primary by inversion, and one per screen.
-  primary: "bg-ink text-ground hover:bg-white",
+  primary: "bg-ink text-white hover:bg-[#343d47]",
   secondary: "border border-control text-ink hover:border-faint hover:bg-raised",
   ghost: "text-muted hover:bg-raised hover:text-ink",
   danger: "border border-negative/50 text-negative hover:bg-negative-soft",

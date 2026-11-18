@@ -1,18 +1,13 @@
-// The Claude sidebar. It asks the real CLI through the API and shows what
-// comes back as it is written. Nothing is attached to a question unless its
-// box is ticked, every answer shows what it used, and when the assistant
-// cannot answer, the reason is what is shown.
-
-import { Fragment, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
-import { Square } from "lucide-react";
+import { ArrowUp, Plus, Square } from "lucide-react";
 import { AskRefused, askAssistant, interviewApi } from "../api";
 import type { Role, SessionView, Turn } from "../api";
 import { bytesText } from "../format";
 import { useResource, useStored } from "../hooks";
-import { TurnBlock, UsageTotal } from "../parts/transcript";
+import { TurnBlock } from "../parts/transcript";
 import { cn } from "../classes";
-import { Button, Failure, Note, textareaClass } from "../ui";
+import { Button, Failure, IconButton, Note } from "../ui";
 
 interface Stream {
   turn: Turn | null;
@@ -89,7 +84,7 @@ export const AssistantPane = ({
   const ask = async (event?: FormEvent) => {
     event?.preventDefault();
     const text = question.trim();
-    if (!text || answering || !ready || codeTooLarge) return;
+    if (!text || abort.current || answering || !ready || codeTooLarge) return;
     const controller = new AbortController();
     abort.current = controller;
     setError(null);
@@ -101,9 +96,9 @@ export const AssistantPane = ({
         sessionId,
         {
           question: text,
-          context: selection,
+          context: { prompt: selection.prompt, code: selection.code && Boolean(code.trim()), tests: selection.tests && Boolean(latestRunAt) },
           // The editor's text leaves the browser only when its box is ticked.
-          ...(selection.code ? { code } : {}),
+          ...(selection.code && code.trim() ? { code } : {}),
           ...(conversationId ? { conversationId } : {}),
         },
         {
@@ -125,7 +120,7 @@ export const AssistantPane = ({
         setError(failure.message);
         onAvailabilityStale();
       } else if (!controller.signal.aborted) {
-        setError("The connection dropped before the answer finished. What arrived is kept below if the server recorded it.");
+        setError("Connection lost. Try again.");
       }
     } finally {
       abort.current = null;
@@ -160,81 +155,40 @@ export const AssistantPane = ({
 
   const shown = turns.data ?? [];
   const liveId = stream?.turn?.id;
-  const statusLine = answering
-    ? stopping
-      ? "Stopping"
-      : stream.text
-        ? "Claude is answering"
-        : stream.thinking
-          ? "Claude is thinking"
-          : "Waiting for Claude"
-    : ready
-      ? "Claude is available"
-      : assistant.detail;
-
-  const attach: { key: keyof typeof EMPTY_SELECTION; label: string; detail: string }[] = [
-    { key: "prompt", label: "Problem", detail: "the brief, criteria and public examples" },
-    { key: "code", label: role === "candidate" ? "My code" : "The code", detail: bytesText(codeBytes) },
-    {
-      key: "tests",
-      label: "Latest test results",
-      detail: latestRunAt ? "the last judged run" : "no run judged yet",
-    },
-  ];
+  const statusLine = answering ? (stopping ? "Stopping…" : "Working…") : ready ? "Ready" : assistant.detail;
+  const attachments = [
+    { key: "prompt", label: "Problem", disabled: false },
+    { key: "code", label: "Code", disabled: !code.trim() },
+    { key: "tests", label: "Tests", disabled: !latestRunAt },
+  ] as const;
 
   return (
     <div className="flex h-full min-h-0 flex-col text-sm">
-      <div className="flex-none space-y-1 border-b border-rule px-4 py-3">
-        <p className="flex items-center gap-2 text-ink" role="status">
-          <span aria-hidden className={cn("size-2 flex-none rounded-full", answering ? "bg-accent" : STATE_DOT[assistant.state])} />
-          <span className="text-pretty">{statusLine}</span>
+      <header className="flex min-h-9 flex-none items-center justify-between gap-2 bg-ground px-3">
+        <p className="flex items-center gap-1.5 text-xs text-muted" role="status">
+          <span aria-hidden className={cn("size-1.5 flex-none rounded-full", answering ? "bg-accent" : STATE_DOT[assistant.state])} />
+          {statusLine}
+          <span className="sr-only">{ready ? assistant.model : null}</span>
         </p>
-        {assistant.model && view.aiPolicy === "allowed" && (
-          <p className="text-xs text-faint">
-            <span className="font-figure">{assistant.model}</span>
-            {assistant.effort ? `, ${assistant.effort} effort` : ""} · {assistant.turnsUsed} of{" "}
-            {assistant.limits.turnsPerSession} questions used in this session
-          </p>
+        {ready && (
+          <IconButton
+            label="New conversation"
+            className="size-7"
+            disabled={answering || conversationId === null}
+            onClick={() => setConversationId(null)}
+          >
+            <Plus className="size-4" aria-hidden />
+          </IconButton>
         )}
-        {view.aiPolicy === "allowed" && (
-          <p className="text-xs text-pretty text-faint">
-            {role === "candidate"
-              ? "Your interviewer can read this conversation. Only what you tick below is sent with a question."
-              : "You see every question asked in this session. The candidate sees only their own."}
-          </p>
-        )}
-      </div>
+      </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto" aria-label="Conversation">
-        {view.aiPolicy !== "allowed" ? (
-          <p className="px-4 py-4 text-pretty text-muted">
-            AI assistance is off for this session, so there is no assistant to ask.
-            {role === "interviewer" && " You can allow it on the session's Setup tab."}
-          </p>
-        ) : turns.error && !turns.data ? (
+        {view.aiPolicy === "allowed" && (turns.error && !turns.data ? (
           <Failure message={turns.error} onRetry={turns.reload} />
-        ) : shown.length === 0 && !answering ? (
-          <p className="px-4 py-4 text-pretty text-muted">
-            {role === "candidate"
-              ? "No questions yet. Ask about the problem, your code or a failing case, and tick what Claude should see."
-              : "No questions have been asked in this session."}
-          </p>
-        ) : (
+        ) : shown.length === 0 && !answering ? null : (
           <div className="divide-y divide-rule">
-            {shown.map((turn, index) => (
-              <Fragment key={turn.id}>
-                {index > 0 && shown[index - 1].conversationId !== turn.conversationId && (
-                  <p className="bg-ground px-4 py-1 text-xs text-faint">New conversation</p>
-                )}
-                {turn.id === liveId ? null : (
-                  <TurnBlock
-                    turn={turn}
-                    viewer={role}
-                    configuredModel={assistant.model}
-                    streamingText={turn.status === "running" ? "" : undefined}
-                  />
-                )}
-              </Fragment>
+            {shown.filter((turn) => turn.id !== liveId).map((turn) => (
+              <TurnBlock key={turn.id} turn={turn} viewer={role} configuredModel={assistant.model} compact />
             ))}
             {stream?.turn && (
               <TurnBlock
@@ -243,75 +197,59 @@ export const AssistantPane = ({
                 configuredModel={assistant.model}
                 streamingText={stream.text}
                 thinking={stream.thinking}
+                compact
               />
             )}
-            {stream && !stream.turn && <p className="px-4 py-3.5 text-muted">Sending your question.</p>}
           </div>
-        )}
+        ))}
         <div ref={end} />
       </div>
 
-      {view.aiPolicy === "allowed" && (
-        <form onSubmit={ask} className="flex-none space-y-2.5 border-t border-line px-4 py-3">
-          {shown.length > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <UsageTotal turns={shown} />
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={answering || conversationId === null}
-                onClick={() => setConversationId(null)}
-                title="The next question starts fresh, without the earlier ones"
+      {view.aiPolicy === "allowed" && (ready || answering) && (
+        <form onSubmit={ask} className="flex-none border-t border-line bg-surface p-3">
+          <fieldset className="mb-2 flex flex-wrap items-center gap-1.5" disabled={answering || !ready}>
+            <legend className="sr-only">Attach context</legend>
+            {attachments.map((item) => (
+              <label
+                key={item.key}
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line px-2 py-1 text-xs text-muted has-checked:border-control has-checked:bg-raised has-checked:text-ink has-disabled:cursor-not-allowed has-disabled:opacity-50"
               >
-                New conversation
-              </Button>
-            </div>
-          )}
-          <fieldset className="space-y-1" disabled={answering || !ready}>
-            <legend className="mb-1 text-xs text-faint">Attach to this question</legend>
-            {attach.map((item) => (
-              <label key={item.key} className="flex cursor-pointer items-baseline gap-2 has-disabled:cursor-not-allowed">
                 <input
                   type="checkbox"
-                  checked={selection[item.key]}
+                  checked={selection[item.key] && !item.disabled}
+                  disabled={item.disabled}
                   onChange={(event) => setSelection({ ...selection, [item.key]: event.target.checked })}
-                  className="size-3.5 translate-y-0.5 accent-[var(--color-ink)]"
+                  className="size-3 accent-[var(--color-ink)]"
                 />
-                <span className={selection[item.key] ? "text-ink" : "text-muted"}>{item.label}</span>
-                <span className="text-xs text-faint">{item.detail}</span>
+                {item.label}
               </label>
             ))}
           </fieldset>
-          {codeTooLarge && (
-            <Note tone="negative">
-              The code is {bytesText(codeBytes)}. The assistant accepts {bytesText(assistant.limits.codeBytes)}. Shorten
-              it or untick it.
-            </Note>
-          )}
-          <textarea
-            aria-label="Question for Claude"
-            rows={3}
-            maxLength={4000}
-            disabled={!ready && !answering}
-            placeholder={ready ? "Ask Claude. Enter sends, Shift+Enter adds a line." : assistant.detail}
-            value={question}
-            onChange={(event) => setQuestion(event.target.value)}
-            onKeyDown={onKeyDown}
-            className={textareaClass}
-          />
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">{error && <Note tone="negative">{error}</Note>}</div>
+          <div className="flex items-end gap-1.5 rounded-lg border border-control bg-ground p-1.5 focus-within:border-faint">
+            <textarea
+              aria-label="Ask Codex"
+              aria-describedby={role === "candidate" ? "codex-visibility" : undefined}
+              rows={2}
+              maxLength={4000}
+              placeholder="Ask Codex"
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              onKeyDown={onKeyDown}
+              className="min-w-0 flex-1 resize-none bg-transparent px-1.5 py-1 text-sm text-ink placeholder:text-faint"
+            />
             {answering ? (
-              <Button onClick={stop} disabled={stopping || !stream.turn}>
+              <Button size="sm" variant="primary" aria-label="Stop" className="size-8 p-0" onClick={stop} disabled={stopping}>
                 <Square className="size-3.5" aria-hidden />
-                {stopping ? "Stopping" : "Stop"}
               </Button>
             ) : (
-              <Button type="submit" disabled={!ready || !question.trim() || Boolean(codeTooLarge)}>
-                Ask Claude
+              <Button size="sm" variant="primary" aria-label="Send to Codex" className="size-8 p-0" type="submit" disabled={!ready || !question.trim() || codeTooLarge}>
+                <ArrowUp className="size-4" aria-hidden />
               </Button>
             )}
           </div>
+          {role === "candidate" && <p id="codex-visibility" className="mt-1.5 text-xs text-faint">Visible to your interviewer</p>}
+          {codeTooLarge && <Note tone="negative">Code exceeds {bytesText(assistant.limits.codeBytes)}. Remove the attachment to send.</Note>}
+          {error && <Note tone="negative">{error}</Note>}
         </form>
       )}
     </div>

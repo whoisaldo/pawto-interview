@@ -691,9 +691,6 @@ def export_markdown(document: dict) -> str:
     def when(value) -> str:
         return value.strftime("%Y-%m-%d %H:%M UTC") if value else "not recorded"
 
-    def minutes(seconds: int) -> str:
-        return f"{seconds // 60} min {seconds % 60:02d} s"
-
     lines = [
         f"# Interview evaluation: {session['title']}",
         "",
@@ -701,7 +698,7 @@ def export_markdown(document: dict) -> str:
         + (f" ({session['candidate']['email']})" if session["candidate"]["email"] else ""),
         f"- Problem: {session['problem']['title']}",
         f"- AI assistant: {'allowed' if session['aiEnabled'] else 'disabled'} for this session",
-        f"- Session: {session['status']}, {minutes(session['elapsedSeconds'])} used of {minutes(session['durationSeconds'])}",
+        f"- Session: {session['status']}",
         f"- Started: {when(session['startedAt'])}",
         f"- Ended: {when(session['endedAt'])}",
         f"- Evaluation saved: {when(document['updatedAt']) if document['saved'] else 'not saved yet'}"
@@ -751,8 +748,7 @@ def export_markdown(document: dict) -> str:
         lines.append(
             f"{asked}: {assistant['askedByCandidate']} by the candidate, "
             f"{assistant['askedByInterviewer']} by the interviewer. "
-            f"{assistant['inputTokens']} input tokens, {assistant['outputTokens']} output tokens, "
-            f"about ${assistant['costUsd']:.4f} at list price."
+            f"{assistant['inputTokens']} input tokens, {assistant['outputTokens']} output tokens."
         )
     lines.append("")
     return "\n".join(lines)

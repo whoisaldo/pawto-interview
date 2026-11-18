@@ -6,7 +6,6 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Plus, Search } from "lucide-react";
 import { interviewApi } from "../api";
 import type { LibraryProblem } from "../api";
-import { durationText } from "../format";
 import { useResource } from "../hooks";
 import { CaseList, Criteria, GuideView, SectionTitle, Statement } from "../parts/brief";
 import { buttonClass, cn } from "../classes";
@@ -45,7 +44,6 @@ const Detail = ({ problem }: { problem: LibraryProblem }) => (
         </p>
         <p className="mt-1.5 text-xs text-faint">
           {problem.examples.length} public examples · {problem.heldBack.length} held-back cases ·{" "}
-          {problem.recommendedDurationSeconds ? `${durationText(problem.recommendedDurationSeconds)} planned · ` : ""}
           used in {problem.sessionCount} {problem.sessionCount === 1 ? "session" : "sessions"}
         </p>
       </div>

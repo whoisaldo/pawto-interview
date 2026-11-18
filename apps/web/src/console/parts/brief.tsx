@@ -19,11 +19,11 @@ const shown = (text: string) => (text.trim() === "" ? "(no input)" : text.trim()
 export const CaseList = ({ cases, className }: { cases: Case[]; className?: string }) => (
   <ul className={cn("divide-y divide-rule rounded-md border border-line", className)}>
     {cases.map((item) => (
-      <li key={item.index} className="grid gap-x-4 gap-y-1 px-3 py-2 sm:grid-cols-[minmax(0,11rem)_1fr_auto] sm:items-baseline">
-        <span className="text-body text-ink">{item.name}</span>
-        <Figure className="min-w-0 text-xs break-all text-muted">{shown(item.input)}</Figure>
+      <li key={item.index} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-3 gap-y-1 px-3 py-2">
+        <span className="col-span-2 text-body font-medium text-ink">{item.name}</span>
+        <Figure className="min-w-0 text-xs break-words whitespace-pre-line text-muted"><span className="mb-0.5 block font-app text-faint">Input</span>{shown(item.input)}</Figure>
         <Figure className="text-xs text-ink">
-          <span className="sr-only">expected </span>
+          <span className="mb-0.5 block font-app text-faint">Expected</span>
           {item.expected}
         </Figure>
       </li>
@@ -68,31 +68,19 @@ export const GuideView = ({
       </p>
     );
   }
-  let minute = 0;
   return (
     <div className="space-y-6 text-body">
       {guide?.timeline && (
         <section>
-          <SectionTitle aside={`${guide.timeline.reduce((total, phase) => total + phase.minutes, 0)} minutes in all`}>
-            Plan
-          </SectionTitle>
-          <ol className="divide-y divide-rule rounded-md border border-line">
-            {guide.timeline.map((phase) => {
-              const from = minute;
-              minute += phase.minutes;
-              return (
-                <li key={phase.phase} className="grid gap-x-4 gap-y-0.5 px-3 py-2 sm:grid-cols-[5.5rem_1fr]">
-                  <Figure className="text-xs text-faint">
-                    {from}:00 to {minute}:00
-                  </Figure>
-                  <div>
-                    <p className="font-medium text-ink">{phase.phase}</p>
-                    <p className="text-pretty text-muted">{phase.detail}</p>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
+          <SectionTitle>Interview guide</SectionTitle>
+          <ul className="divide-y divide-rule rounded-md border border-line">
+            {guide.timeline.map((phase) => (
+              <li key={phase.phase} className="px-3 py-2">
+                <p className="font-medium text-ink">{phase.phase}</p>
+                <p className="text-pretty text-muted">{phase.detail}</p>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
       {guide?.changeRequest && (

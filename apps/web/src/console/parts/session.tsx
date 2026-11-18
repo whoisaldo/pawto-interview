@@ -1,53 +1,20 @@
-// A session's clock and the controls that move it.
+// Session controls and invites.
 
 import { useState } from "react";
 import { Pause, Play, RotateCcw, Square } from "lucide-react";
 import { errorMessage, interviewApi } from "../api";
-import type { Clock, SessionSummary } from "../api";
-import { clockText, durationText, inviteUrl } from "../format";
-import { useLiveClock } from "../hooks";
-import { cn } from "../classes";
+import type { SessionSummary } from "../api";
+import { inviteUrl } from "../format";
 import {
   Button,
   ConfirmButton,
   CopyField,
-  Figure,
   Note,
 } from "../ui";
 
 export const InviteLink = ({ inviteCode }: { inviteCode: string }) => (
   <CopyField label="Candidate invite link" value={inviteUrl(inviteCode)} />
 );
-
-/** Time left while a session can still run, and time used once it has ended. */
-export const ClockReadout = ({ clock, size = "lg" }: { clock: Clock; size?: "md" | "lg" }) => {
-  const live = useLiveClock(clock);
-  const ended = clock.status === "ended";
-  const over = live.over > 0;
-  return (
-    <div className="flex items-baseline gap-2.5">
-      <Figure
-        className={cn(
-          "leading-none font-medium",
-          size === "lg" ? "text-3xl" : "text-xl",
-          over ? "text-negative" : clock.status === "running" ? "text-ink" : "text-muted",
-        )}
-      >
-        <span className="sr-only">{ended ? "Time used " : over ? "Over time by " : "Time left "}</span>
-        {ended ? clockText(live.elapsed) : over ? `+${clockText(live.over)}` : clockText(live.remaining)}
-      </Figure>
-      <span className="text-xs text-faint">
-        {ended
-          ? `used of ${durationText(clock.durationSeconds)}`
-          : over
-            ? `over the ${durationText(clock.durationSeconds)} planned`
-            : clock.status === "scheduled"
-              ? `planned, not started`
-              : `left of ${durationText(clock.durationSeconds)}`}
-      </span>
-    </div>
-  );
-};
 
 /** Start, pause, end and reset. Ending and resetting ask first. */
 export const SessionControls = ({
@@ -126,7 +93,7 @@ export const SessionControls = ({
               </>
             }
             title={`Reset "${session.title}"?`}
-            description="The clock goes back to zero, the session returns to scheduled and held-back cases are hidden again. Runs, assistant questions and notes already recorded are kept."
+            description="Return this session to Scheduled and hide held-back cases. Previous runs, questions, and notes are kept."
             confirmLabel="Reset session"
             onConfirm={() => act("reset")}
           />

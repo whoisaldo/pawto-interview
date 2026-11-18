@@ -7,8 +7,6 @@ import { useConsole } from "../context";
 import { errorMessage, interviewApi } from "../api";
 import type { AiPolicy, BriefEdit, LibraryProblem } from "../api";
 import { AI_OPTIONS } from "../options";
-import { durationText } from "../format";
-import { cn } from "../classes";
 import { useResource } from "../hooks";
 import { Criteria, SectionTitle, Statement } from "../parts/brief";
 import { buttonClass } from "../classes";
@@ -26,8 +24,6 @@ import {
   textareaClass,
 } from "../ui";
 
-const MINUTES = [7, 20, 45, 60];
-
 const Form = ({
   library,
   defaults,
@@ -38,16 +34,13 @@ const Form = ({
   const navigate = useNavigate();
   const { sessions } = useConsole();
   const [params] = useSearchParams();
-  const initial = library.find((problem) => problem.slug === params.get("problem")) ?? library[0];
+  const initial = library.find((problem) => problem.slug === params.get("problem")) ?? library.find((problem) => problem.slug === "two-sum") ?? library[0];
 
   const [problemId, setProblemId] = useState(initial.id);
   const problem = library.find((item) => item.id === problemId) ?? initial;
   const [title, setTitle] = useState("");
   const [candidateName, setCandidateName] = useState("");
   const [candidateEmail, setCandidateEmail] = useState("");
-  const [minutes, setMinutes] = useState(
-    String(Math.round((initial.recommendedDurationSeconds ?? defaults.durationSeconds) / 60)),
-  );
   const [aiPolicy, setAiPolicy] = useState<AiPolicy>(defaults.aiPolicy);
   const [statement, setStatement] = useState("");
   const [criteria, setCriteria] = useState("");
@@ -56,9 +49,7 @@ const Form = ({
   const [error, setError] = useState<string | null>(null);
 
   const pick = (id: string) => {
-    const next = library.find((item) => item.id === id)!;
     setProblemId(id);
-    setMinutes(String(Math.round((next.recommendedDurationSeconds ?? defaults.durationSeconds) / 60)));
     // Wording written for one problem does not carry to another.
     setStatement("");
     setCriteria("");
@@ -71,12 +62,8 @@ const Form = ({
     setEditing(true);
   };
 
-  const length = Number(minutes);
-  const lengthError = !Number.isFinite(length) || length < 1 || length > 240 ? "Between 1 and 240 minutes." : null;
-
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (lengthError) return;
     setBusy(true);
     setError(null);
     const brief: BriefEdit = {};
@@ -91,7 +78,7 @@ const Form = ({
         candidateName,
         candidateEmail: candidateEmail.trim() || null,
         problemId,
-        durationSeconds: Math.round(length * 60),
+        durationSeconds: defaults.durationSeconds,
         aiPolicy,
         ...(Object.keys(brief).length > 0 ? { brief } : {}),
       });
@@ -120,7 +107,7 @@ const Form = ({
               className={inputClass}
             />
           </Field>
-          <Field label="Candidate email" htmlFor="candidate-email" hint="Optional. Kept on the evaluation; nothing is sent.">
+          <Field label="Candidate email (optional)" htmlFor="candidate-email">
             <input
               id="candidate-email"
               type="email"
@@ -131,9 +118,10 @@ const Form = ({
               className={inputClass}
             />
           </Field>
-          <Field label="Title" htmlFor="session-title" hint={`Left empty, it is "${problem.title}".`}>
+          <Field label="Title (optional)" htmlFor="session-title" >
             <input
               id="session-title"
+              placeholder={problem.title}
               maxLength={120}
               autoComplete="off"
               value={title}
@@ -164,32 +152,6 @@ const Form = ({
               </optgroup>
             </select>
           </Field>
-          <Field
-            label="Length in minutes"
-            htmlFor="session-minutes"
-            error={minutes !== "" ? lengthError : null}
-            hint={
-              problem.recommendedDurationSeconds
-                ? `The guide for this problem plans ${durationText(problem.recommendedDurationSeconds)}.`
-                : undefined
-            }
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                id="session-minutes"
-                inputMode="numeric"
-                required
-                value={minutes}
-                onChange={(event) => setMinutes(event.target.value.replace(/[^0-9]/g, ""))}
-                className={cn(inputClass, "w-24 font-figure")}
-              />
-              {MINUTES.map((value) => (
-                <Button key={value} size="sm" onClick={() => setMinutes(String(value))} aria-label={`${value} minutes`}>
-                  {value}
-                </Button>
-              ))}
-            </div>
-          </Field>
           <div className="space-y-1.5">
             <p className="text-body font-medium text-ink">AI assistance</p>
             <Choice
@@ -200,7 +162,6 @@ const Form = ({
               onChange={setAiPolicy}
               className="-ml-2.5"
             />
-            <Note>{AI_OPTIONS.find((option) => option.value === aiPolicy)!.hint}</Note>
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-3 border-t border-rule px-5 py-3">
@@ -208,7 +169,7 @@ const Form = ({
           <Link to="/console/interviews" className={buttonClass("ghost")}>
             Cancel
           </Link>
-          <Button type="submit" variant="primary" disabled={busy || !candidateName.trim() || Boolean(lengthError)}>
+          <Button type="submit" variant="primary" disabled={busy || !candidateName.trim()}>
             {busy ? "Creating" : "Create interview"}
           </Button>
         </div>

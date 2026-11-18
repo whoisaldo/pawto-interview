@@ -28,7 +28,9 @@ COMPLEXITY_SOURCE = (Path(__file__).parent / "complexity.py").read_text()
 # Room for the interpreter and the judge on top of the program's own limit.
 CONTAINER_MEMORY_OVERHEAD_MB = 64
 # Container start and interpreter start, on top of the program's own limits.
-STARTUP_ALLOWANCE_SECONDS = 20
+STARTUP_ALLOWANCE_SECONDS = int(os.getenv("SANDBOX_STARTUP_ALLOWANCE_SECONDS", "20"))
+if not 1 <= STARTUP_ALLOWANCE_SECONDS <= 120:
+    raise ValueError("SANDBOX_STARTUP_ALLOWANCE_SECONDS must be between 1 and 120")
 
 # `runsc` in production: gVisor answers the program's system calls itself, so
 # escaping the container takes a gVisor bug and then a kernel bug, not one

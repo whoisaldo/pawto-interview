@@ -6,20 +6,17 @@ import type { FormEvent, ReactNode } from "react";
 import { useConsole } from "../context";
 import { errorMessage, interviewApi } from "../api";
 import type { AiPolicy, AssistantTest, InterviewSettings, SystemStatus } from "../api";
-import { bytesText, countText, durationText, secondsText, timeAgo, usdText } from "../format";
-import { cn } from "../classes";
+import { bytesText, countText, secondsText, timeAgo, usdText } from "../format";
 import { useResource } from "../hooks";
 import {
   Button,
   Choice,
   Failure,
-  Field,
   Figure,
   Note,
   PageHeader,
   Panel,
   SkeletonRows,
-  inputClass,
 } from "../ui";
 import { AI_OPTIONS } from "../options";
 
@@ -41,23 +38,18 @@ const Row = ({ label, children }: { label: string; children: ReactNode }) => (
 );
 
 const Defaults = ({ settings, onSaved }: { settings: InterviewSettings; onSaved: (next: InterviewSettings) => void }) => {
-  const [minutes, setMinutes] = useState(String(Math.round(settings.defaultDurationSeconds / 60)));
   const [aiPolicy, setAiPolicy] = useState<AiPolicy>(settings.defaultAiPolicy);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const length = Number(minutes);
-  const lengthError = !Number.isFinite(length) || length < 1 || length > 240 ? "Between 1 and 240 minutes." : null;
-  const dirty =
-    Math.round(length * 60) !== settings.defaultDurationSeconds || aiPolicy !== settings.defaultAiPolicy;
+  const dirty = aiPolicy !== settings.defaultAiPolicy;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (lengthError) return;
     setBusy(true);
     setError(null);
     try {
-      onSaved(await interviewApi.saveSettings({ defaultDurationSeconds: Math.round(length * 60), defaultAiPolicy: aiPolicy }));
+      onSaved(await interviewApi.saveSettings({ defaultDurationSeconds: settings.defaultDurationSeconds, defaultAiPolicy: aiPolicy }));
       setSaved(true);
     } catch (failure) {
       setError(errorMessage(failure));
@@ -69,18 +61,6 @@ const Defaults = ({ settings, onSaved }: { settings: InterviewSettings; onSaved:
   return (
     <form onSubmit={submit}>
       <div className="space-y-4 p-5">
-        <Field label="Length in minutes" htmlFor="default-minutes" error={lengthError}>
-          <input
-            id="default-minutes"
-            inputMode="numeric"
-            value={minutes}
-            onChange={(event) => {
-              setMinutes(event.target.value.replace(/[^0-9]/g, ""));
-              setSaved(false);
-            }}
-            className={cn(inputClass, "w-24 font-figure")}
-          />
-        </Field>
         <div className="space-y-1.5">
           <p className="text-body font-medium text-ink">AI assistance</p>
           <Choice
@@ -95,16 +75,10 @@ const Defaults = ({ settings, onSaved }: { settings: InterviewSettings; onSaved:
             className="-ml-2.5"
           />
         </div>
-        <p className="rounded-md bg-ground px-3 py-2 text-body text-pretty text-muted">
-          A new interview will start at{" "}
-          <span className="text-ink">{lengthError ? "a length you still need to set" : durationText(Math.round(length * 60))}</span>{" "}
-          with <span className="text-ink">{aiPolicy === "allowed" ? "AI allowed" : "AI off"}</span>, unless its problem's
-          guide plans a different length. Both can be changed on each interview.
-        </p>
       </div>
       <div className="flex items-center justify-end gap-3 border-t border-rule px-5 py-3">
         {error ? <Note tone="negative">{error}</Note> : saved && !dirty ? <Note tone="positive">Saved</Note> : null}
-        <Button type="submit" variant="primary" disabled={busy || !dirty || Boolean(lengthError)}>
+        <Button type="submit" variant="primary" disabled={busy || !dirty}>
           {busy ? "Saving" : "Save defaults"}
         </Button>
       </div>
@@ -140,19 +114,13 @@ const Assistant = ({ assistant }: { assistant: SystemStatus["assistant"] }) => {
             {assistant.ready ? "Ready" : assistant.problem ? "Misconfigured" : "Not set up"}
           </span>
           {assistant.problem && <p className="mt-0.5 text-pretty text-muted">{assistant.problem}</p>}
-          {!assistant.configured && (
-            <p className="mt-0.5 text-pretty text-muted">
-              No Claude CLI is configured on the server. Sessions with AI allowed tell the candidate the assistant is
-              unavailable. Nothing answers in its place.
-            </p>
-          )}
+
         </Row>
         {assistant.ready && (
           <>
             <Row label="Model">
               <Figure>{assistant.model}</Figure>
               {assistant.effort && <span className="text-muted">, {assistant.effort} effort</span>}
-              <p className="mt-0.5 text-pretty text-muted">The only model asked. If it cannot answer, the question fails.</p>
             </Row>
             <Row label="Launcher and profile">
               <Figure>{assistant.launcher}</Figure> <span className="text-muted">with profile</span>{" "}
@@ -170,12 +138,6 @@ const Assistant = ({ assistant }: { assistant: SystemStatus["assistant"] }) => {
                 {assistant.running} of {assistant.maxRunning} running now across all sessions.
               </span>
             </Row>
-            <Row label="What it can do">
-              <span className="text-pretty text-muted">
-                Answer in text. It runs with no tools, no saved session and none of the profile's own instructions, so it
-                cannot read files or run commands on this machine.
-              </span>
-            </Row>
           </>
         )}
       </dl>
@@ -184,7 +146,7 @@ const Assistant = ({ assistant }: { assistant: SystemStatus["assistant"] }) => {
           {error ? (
             <Note tone="negative">{error}</Note>
           ) : busy ? (
-            <span className="text-muted">Asking Claude one small question.</span>
+            <span className="text-muted">Waiting for Codex…</span>
           ) : result ? (
             result.ok ? (
               <span className="text-positive">
@@ -206,7 +168,7 @@ const Assistant = ({ assistant }: { assistant: SystemStatus["assistant"] }) => {
               </span>
             )
           ) : (
-            <span className="text-faint">A test asks the real model for one word and reports what it used.</span>
+            <span className="text-faint">Send a test prompt.</span>
           )}
         </div>
         <Button onClick={test} disabled={busy}>
@@ -228,7 +190,7 @@ const Settings = () => {
       <div>
         <Section
           title="New interviews"
-          description="What the new-interview form starts with. Whether AI is allowed is always shown on the form and is never decided silently."
+          description="Default AI policy for new interviews."
         >
           {settings.data ? (
             <Defaults settings={settings.data} onSaved={settings.setData} />
@@ -240,13 +202,8 @@ const Settings = () => {
         </Section>
 
         <Section
-          title="Assistant"
-          description={
-            <>
-              <p>The Claude Code CLI on this server that answers in rooms where AI is allowed.</p>
-              <p>It is set in the server's environment, not here, so nobody using the console can point it elsewhere.</p>
-            </>
-          }
+          title="Codex"
+          description="Room assistant connection and usage limits."
         >
           {status ? (
             <Assistant assistant={status.assistant} />

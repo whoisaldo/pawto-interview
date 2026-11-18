@@ -1,5 +1,5 @@
 // The interview room: the brief, the shared editor, the results of each run,
-// and a sidebar for Claude, the room's chat and (for the interviewer) the
+// and a sidebar for Codex, the room's chat and (for the interviewer) the
 // session's controls and evidence notes. One component serves both seats;
 // what each seat is shown is decided by the API.
 
@@ -18,13 +18,12 @@ import { personColor } from "../../lib/ui";
 import { errorMessage, interviewApi } from "../api";
 import type { Role, RunView, SessionView } from "../api";
 import { FullScreenNotice } from "../auth/screens";
-import { clockText, durationText, timeOfDay } from "../format";
-import { useLiveClock, useResource } from "../hooks";
+import { timeOfDay } from "../format";
+import { useResource } from "../hooks";
 import { CaseList, Criteria, GuideView, SectionTitle, Statement } from "../parts/brief";
 import { EvidenceForm } from "../parts/evidence";
-import { PlanStrip } from "../parts/PlanStrip";
 import { RevealControl, RunDetail } from "../parts/runs";
-import { ClockReadout, InviteLink, SessionControls } from "../parts/session";
+import { InviteLink, SessionControls } from "../parts/session";
 import { buttonClass, cn } from "../classes";
 import {
   AiPill,
@@ -67,72 +66,32 @@ const PaneTitle = ({ children, actions }: { children: ReactNode; actions?: React
   </div>
 );
 
-const BriefPane = ({ view, role }: { view: SessionView; role: Role }) => {
+const BriefPane = ({ view }: { view: SessionView }) => {
   const { problem } = view;
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PaneTitle>{problem.title}</PaneTitle>
-      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-4 text-sm leading-6">
-        <section>
-          <SectionTitle>Session</SectionTitle>
-          <ul className="space-y-1 text-muted">
-            <li>
-              <span className="text-ink">{durationText(view.durationSeconds)}</span>, including follow-up questions.
-            </li>
-            <li className="text-pretty">
-              {view.aiPolicy === "allowed" ? (
-                <>
-                  <span className="text-ink">AI assistance is allowed.</span>{" "}
-                  {role === "candidate"
-                    ? "Say what you want from it, check what it tells you, and be ready to explain the code you keep. Your interviewer can read what you ask."
-                    : "The candidate may ask Claude in the sidebar. You can read every question."}
-                </>
-              ) : (
-                <>
-                  <span className="text-ink">AI assistance is off</span> for this session.
-                </>
-              )}
-            </li>
-          </ul>
-        </section>
-        <section>
-          <SectionTitle>Brief</SectionTitle>
+      <PaneTitle>Problem</PaneTitle>
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 text-sm leading-relaxed">
+        <section className="space-y-2">
+          <h3 className="text-xl font-semibold text-balance">{problem.title}</h3>
           <Statement text={problem.statement} />
         </section>
-        <section>
-          <SectionTitle>Acceptance criteria</SectionTitle>
-          <Criteria items={problem.acceptanceCriteria} empty="None were written for this session." />
-        </section>
-        <section>
-          <SectionTitle aside="Input, then the expected output">Public examples</SectionTitle>
-          <CaseList cases={problem.examples} />
-        </section>
-        {problem.heldBackCount > 0 && (
+        {problem.acceptanceCriteria.length > 0 && (
           <section>
-            <SectionTitle
-              aside={
-                view.heldBack
-                  ? view.heldBackRevealed
-                    ? "Revealed to the candidate"
-                    : "Only you can see these"
-                  : undefined
-              }
-            >
-              Held-back cases
-            </SectionTitle>
-            {view.heldBack ? (
-              <CaseList cases={view.heldBack} />
-            ) : (
-              <p className="text-pretty text-muted">
-                {problem.heldBackCount} more cases are judged with every run and kept from you for now. Passing the
-                examples does not mean they pass, so reason about the contract and not only about what you can see.
-              </p>
-            )}
+            <SectionTitle>Requirements</SectionTitle>
+            <Criteria items={problem.acceptanceCriteria} />
           </section>
         )}
-        <p className="text-xs text-faint">
-          Python 3.11. Each case gets {problem.timeLimitMs} ms and {problem.memLimitMb} MB.
-        </p>
+        <section>
+          <SectionTitle>Examples</SectionTitle>
+          <CaseList cases={problem.examples} />
+        </section>
+        {view.heldBack && view.heldBack.length > 0 && (
+          <details>
+            <summary className="cursor-pointer font-medium">Held-back cases ({view.heldBack.length})</summary>
+            <div className="mt-2"><CaseList cases={view.heldBack} /></div>
+          </details>
+        )}
       </div>
     </div>
   );
@@ -188,9 +147,7 @@ const ResultsPane = ({
           <SkeletonRows rows={2} />
         ) : !selected ? (
           <p className="px-4 py-4 text-pretty text-muted">
-            No runs yet. Run tests judges the code against the public examples
-            {view.problem.heldBackCount > 0 ? ` and ${view.problem.heldBackCount} held-back cases` : ""}, each in its own
-            sandbox.
+            Run your code to see results.
           </p>
         ) : (
           <RunDetail run={selected} role={role} />
@@ -237,7 +194,7 @@ const ChatPane = ({
     <div className="flex h-full min-h-0 flex-col text-sm">
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
         {messages.length === 0 && (
-          <p className="text-pretty text-muted">No messages. This chat is between the people in the room.</p>
+          <p className="text-pretty text-muted">No messages yet.</p>
         )}
         {messages.map((message) => (
           <div key={message.id}>
@@ -268,25 +225,18 @@ const ChatPane = ({
   );
 };
 
-/** The interviewer's own tab: the clock, the invite, evidence notes and the guide. */
+/** The interviewer's own tab: the invite, evidence notes and the guide. */
 const SessionPane = ({ view, onChanged }: { view: SessionView; onChanged: () => Promise<void> }) => {
   const rubric = useResource("rubric", interviewApi.rubric);
   const evaluation = useResource(`evaluation:${view.id}`, () => interviewApi.evaluation(view.id));
   return (
     <div className="h-full min-h-0 space-y-6 overflow-y-auto px-4 py-4 text-sm">
       <section className="space-y-3">
-        <ClockReadout clock={view} size="md" />
         <SessionControls session={view} onChanged={onChanged} size="sm" />
         {!view.interviewer?.candidateJoined && (
           <Note tone="warning">The candidate has not opened the invite link yet.</Note>
         )}
       </section>
-      {view.interviewer?.guide?.timeline && (
-        <section>
-          <SectionTitle>Plan</SectionTitle>
-          <PlanStrip clock={view} phases={view.interviewer.guide.timeline} compact />
-        </section>
-      )}
       {view.interviewer && (
         <section>
           <SectionTitle>Candidate invite link</SectionTitle>
@@ -294,7 +244,7 @@ const SessionPane = ({ view, onChanged }: { view: SessionView; onChanged: () => 
         </section>
       )}
       <section>
-        <SectionTitle aside="Saved to the session">Evidence</SectionTitle>
+        <SectionTitle>Evidence</SectionTitle>
         {rubric.data && evaluation.data ? (
           <EvidenceForm
             compact
@@ -346,28 +296,11 @@ const Members = ({ members, colorOf, selfId }: { members: RoomMember[]; colorOf:
   </ul>
 );
 
-const statusNotice = (view: SessionView, role: Role, over: boolean): string | null => {
-  if (view.status === "scheduled") {
-    return role === "candidate"
-      ? "The session has not started. You can read the brief; the editor unlocks when your interviewer starts the clock."
-      : "Not started. The candidate can read the brief, and their editor unlocks when you start the clock.";
-  }
-  if (view.status === "paused") {
-    return role === "candidate"
-      ? "The session is paused. The editor is locked until it resumes."
-      : "Paused. The candidate's editor, runs and assistant are locked until you resume.";
-  }
-  if (view.status === "ended") {
-    return role === "candidate"
-      ? "The session has ended. Your code and runs are saved. Thank you."
-      : "Ended. Nothing more can be edited or run by the candidate. Write the evaluation while it is fresh.";
-  }
-  if (over) {
-    return role === "candidate"
-      ? "Time is up. Finish your sentence; your interviewer will close the session."
-      : "Time is up. The session keeps running until you end it.";
-  }
-  return null;
+const candidateNotice = {
+  scheduled: "Waiting for the interviewer to start.",
+  paused: "Session paused.",
+  ended: "Session ended.",
+  running: null,
 };
 
 export const RoomScreen = ({
@@ -391,10 +324,9 @@ export const RoomScreen = ({
   const [runError, setRunError] = useState<string | null>(null);
   const [restoreToken, setRestoreToken] = useState(0);
   const [sideOpen, setSideOpen] = useState(true);
-  const [sideTab, setSideTab] = useState("claude");
+  const [sideTab, setSideTab] = useState("codex");
   const [narrowTab, setNarrowTab] = useState("code");
   const sideRef = usePanelRef();
-  const clock = useLiveClock(view.data);
 
   // The socket says that something changed; the API says what, for this seat.
   const reloadView = view.reload;
@@ -422,7 +354,7 @@ export const RoomScreen = ({
 
   const mine = runs.data?.some((run) => run.userId === selfId && run.state !== "judged") ?? false;
   const running = submitting || mine;
-  const canRun = Boolean(view.data) && (role === "interviewer" || status === "running");
+  const canRun = Boolean(view.data) && status !== "ended" && (role === "interviewer" || status === "running");
   const problemId = view.data?.problem.id;
 
   const run = useCallback(async () => {
@@ -461,8 +393,8 @@ export const RoomScreen = ({
     return () => window.removeEventListener("keydown", onKey);
   }, [run, toggleSide]);
 
-  const outer = useDefaultLayout({ id: `tandemcode.room.columns.${role ?? "seat"}`, storage: localStorage });
-  const inner = useDefaultLayout({ id: `tandemcode.room.rows.${role ?? "seat"}`, storage: localStorage });
+  const outer = useDefaultLayout({ id: `tandemcode.interview.columns.${role ?? "seat"}`, storage: localStorage });
+  const inner = useDefaultLayout({ id: `tandemcode.interview.rows.${role ?? "seat"}`, storage: localStorage });
 
   if (!view.data || !role || !user) {
     return view.error ? (
@@ -487,41 +419,11 @@ export const RoomScreen = ({
   const ownerPresent = members.some((member) => member.role === "owner");
   const isOwner = members.find((member) => member.userId === selfId)?.role === "owner";
   const lowest = members.map((member) => member.userId).sort()[0];
-  const notice = statusNotice(session, role, clock.over > 0);
+  const notice = role === "candidate" ? candidateNotice[session.status] : null;
   const latestJudged = runs.data?.find((item) => item.state === "judged");
 
   const editor = (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex min-h-10 flex-none flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-rule px-4 py-1">
-        <p className="text-xs text-faint">
-          Python 3.11{locked ? " · read-only" : ""}
-          {members.length > 1 && " · shared with everyone in the room"}
-        </p>
-        <div className="flex items-center gap-2">
-          {runError && <Note tone="negative">{runError}</Note>}
-          {role === "interviewer" && (
-            <ConfirmButton
-              size="sm"
-              variant="ghost"
-              label="Restore starter"
-              title="Replace the code with the starter?"
-              description="Everything in the editor is replaced by this session's starter code, for everyone in the room. Runs already recorded are kept."
-              confirmLabel="Replace the code"
-              onConfirm={() => setRestoreToken((token) => token + 1)}
-            />
-          )}
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={run}
-            disabled={running || !canRun}
-            title={canRun ? "Ctrl or Cmd with Enter" : "Runs are open while the session is running"}
-          >
-            <Play className="size-3.5" aria-hidden />
-            {running ? "Running" : "Run tests"}
-          </Button>
-        </div>
-      </div>
       <div className="min-h-0 flex-1">
         <CollaborativeEditor
           roomId={session.roomId}
@@ -533,6 +435,7 @@ export const RoomScreen = ({
           onCodeChange={setCode}
           colorOf={colorOf}
           height="100%"
+          interviewMode
           readOnly={locked}
           draftKey={`tandemcode.draft.${session.id}.${session.problem.id}.${user.id}`}
           restoreToken={restoreToken}
@@ -542,7 +445,7 @@ export const RoomScreen = ({
     </div>
   );
 
-  const brief = <BriefPane view={session} role={role} />;
+  const brief = <BriefPane view={session} />;
   const results = <ResultsPane view={session} role={role} runs={runs.data} error={runs.error} onChanged={refresh} />;
   const assistant = (
     <AssistantPane
@@ -559,11 +462,11 @@ export const RoomScreen = ({
   const side = (
     <Tabs.Root value={sideTab} onValueChange={(value) => setSideTab(String(value))} className="flex h-full min-h-0 flex-col">
       <TabList className="flex-none px-4">
-        <Tab value="claude">Claude</Tab>
+        <Tab value="codex">Codex</Tab>
         <Tab value="chat">Chat</Tab>
         {role === "interviewer" && <Tab value="session">Session</Tab>}
       </TabList>
-      <Tabs.Panel value="claude" keepMounted className="min-h-0 flex-1 data-hidden:hidden">
+      <Tabs.Panel value="codex" keepMounted className="min-h-0 flex-1 data-hidden:hidden">
         {assistant}
       </Tabs.Panel>
       <Tabs.Panel value="chat" className="min-h-0 flex-1">
@@ -582,53 +485,52 @@ export const RoomScreen = ({
 
   return (
     <div className="console flex h-dvh flex-col overflow-hidden">
-      <header className="flex min-h-12 flex-none flex-wrap items-center gap-x-4 gap-y-1 border-b border-line px-4 py-1.5">
+      <header className="flex min-h-14 flex-none flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line bg-surface px-3 py-2 sm:px-4">
         {exit ? (
           <Link to={exit.to} className="flex flex-none items-center gap-1.5 rounded-sm text-sm text-muted hover:text-ink">
             <ArrowLeft className="size-3.5" aria-hidden />
             {exit.label}
           </Link>
         ) : (
-          <img src="/mascot.png" alt="TandemCode" className="pixelated size-6 flex-none" />
+          <img src="/mascot.png" alt="PawtoInterview" className="pixelated size-6 flex-none" />
         )}
         <h1 className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
-          {session.title}
-          <span className="ml-2 font-normal text-faint">
-            {role === "candidate" ? session.candidateName : `with ${session.candidateName}`}
-          </span>
+          {session.problem.title}
+          {role === "interviewer" && <span className="ml-2 hidden font-normal text-muted sm:inline">{session.candidateName}</span>}
         </h1>
 
         <div className="flex flex-none items-center gap-3">
-          <Figure
-            className={cn(
-              "text-xl leading-none font-medium",
-              clock.over > 0 ? "text-negative" : session.status === "running" ? "text-ink" : "text-muted",
-            )}
-          >
-            <span className="sr-only">
-              {session.status === "ended" ? "Time used " : clock.over > 0 ? "Over time by " : "Time left "}
-            </span>
-            {session.status === "ended"
-              ? clockText(clock.elapsed)
-              : clock.over > 0
-                ? `+${clockText(clock.over)}`
-                : clockText(clock.remaining)}
-          </Figure>
-          {session.status === "ended" && <span className="-ml-1.5 text-xs text-faint">used</span>}
           <StatusPill status={session.status} />
           <AiPill policy={session.aiPolicy} />
           {session.isSample && <Pill>Sample</Pill>}
         </div>
 
-        <div className="flex flex-none items-center gap-3">
+        <div className="hidden flex-none items-center gap-2 sm:flex">
           <Members members={members} colorOf={colorOf} selfId={selfId} />
           <span className="flex items-center gap-1.5 text-xs text-muted" role="status">
             <span
               aria-hidden
               className={cn("size-1.5 rounded-full", isConnected ? "bg-positive" : "bg-warning")}
             />
-            {isConnected ? "Live" : connectionState === "connecting" ? "Connecting" : "Reconnecting"}
+            {isConnected ? "Connected" : connectionState === "connecting" ? "Connecting" : "Reconnecting"}
           </span>
+        </div>
+        <div className="flex flex-none items-center gap-1.5">
+          {role === "interviewer" && (
+            <ConfirmButton
+              size="sm"
+              variant="ghost"
+              label="Restore starter"
+              title="Replace the code with the starter?"
+              description="This replaces the shared editor contents. Previous runs are kept."
+              confirmLabel="Replace code"
+              onConfirm={() => setRestoreToken((token) => token + 1)}
+            />
+          )}
+          <Button variant="primary" size="sm" onClick={run} disabled={running || !canRun || locked}>
+            <Play className="size-3.5" aria-hidden />
+            {running ? "Running" : "Run tests"}
+          </Button>
           {wide && (
             <IconButton
               label={sideOpen ? "Hide the sidebar (Ctrl or Cmd with J)" : "Show the sidebar (Ctrl or Cmd with J)"}
@@ -640,6 +542,8 @@ export const RoomScreen = ({
           )}
         </div>
       </header>
+
+      {runError && <Note tone="negative" className="border-b border-line px-4 py-2">{runError}</Note>}
 
       {notice && (
         <p role="status" className="flex-none border-b border-line bg-raised px-4 py-1.5 text-sm text-pretty text-ink">
@@ -654,7 +558,7 @@ export const RoomScreen = ({
           defaultLayout={outer.defaultLayout}
           onLayoutChanged={outer.onLayoutChanged}
         >
-          <SplitPanel id="brief" defaultSize="27%" minSize="16%" collapsible collapsedSize={0} className="bg-surface">
+          <SplitPanel id="brief" defaultSize="25%" minSize="16%" collapsible collapsedSize={0} className="bg-surface">
             {brief}
           </SplitPanel>
           <Separator className={cn(divider, "w-px")} aria-label="Resize the brief" />
@@ -665,11 +569,11 @@ export const RoomScreen = ({
               defaultLayout={inner.defaultLayout}
               onLayoutChanged={inner.onLayoutChanged}
             >
-              <SplitPanel id="editor" defaultSize="60%" minSize="20%">
+              <SplitPanel id="editor" defaultSize="69%" minSize="20%">
                 {editor}
               </SplitPanel>
               <Separator className={cn(divider, "h-px")} aria-label="Resize the results" />
-              <SplitPanel id="results" defaultSize="40%" minSize="12%" className="bg-surface">
+              <SplitPanel id="results" defaultSize="31%" minSize="12%" className="bg-surface">
                 {results}
               </SplitPanel>
             </Group>
@@ -678,7 +582,7 @@ export const RoomScreen = ({
           <SplitPanel
             id="side"
             panelRef={sideRef}
-            defaultSize="30%"
+            defaultSize="26%"
             minSize="20%"
             collapsible
             collapsedSize={0}
@@ -698,7 +602,7 @@ export const RoomScreen = ({
             <Tab value="brief">Brief</Tab>
             <Tab value="code">Code</Tab>
             <Tab value="results">Results</Tab>
-            <Tab value="side">Claude and chat</Tab>
+            <Tab value="side">Codex</Tab>
           </TabList>
           <Tabs.Panel value="brief" className="min-h-0 flex-1 bg-surface">
             {brief}

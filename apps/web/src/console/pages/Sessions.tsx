@@ -7,10 +7,10 @@ import { Search } from "lucide-react";
 import { useConsole } from "../context";
 import { interviewApi } from "../api";
 import type { SessionSummary } from "../api";
-import { dayAndTime, usdText } from "../format";
+import { dayAndTime } from "../format";
 import { useResource, useStored } from "../hooks";
 import { ScoreRow } from "../parts/evidence";
-import { ClockCell, LastRunCell, SessionCell } from "../parts/rows";
+import { LastRunCell, SessionCell } from "../parts/rows";
 import { cn } from "../classes";
 import {
   AiPill,
@@ -108,7 +108,6 @@ const Sessions = () => {
                   <th className={thClass}>Session</th>
                   <th className={thClass}>Status</th>
                   <th className={thClass}>AI</th>
-                  <th className={cn(thClass, "text-right")}>Time</th>
                   <th className={cn(thClass, "text-right")}>Runs</th>
                   <th className={thClass}>Last run</th>
                   <th className={cn(thClass, "text-right")}>Assistant</th>
@@ -128,9 +127,6 @@ const Sessions = () => {
                     <td className={tdClass}>
                       <AiPill policy={session.aiPolicy} />
                     </td>
-                    <td className={cn(tdClass, "text-right whitespace-nowrap")}>
-                      <ClockCell session={session} />
-                    </td>
                     <td className={cn(tdClass, "text-right font-figure text-muted")}>{session.runs.count}</td>
                     <td className={cn(tdClass, "whitespace-nowrap")}>
                       <LastRunCell session={session} />
@@ -142,8 +138,7 @@ const Sessions = () => {
                         <span className="text-faint">Not used</span>
                       ) : (
                         <span className="text-muted">
-                          <Figure>{session.assistant.turns}</Figure> asked ·{" "}
-                          <Figure>{usdText(session.assistant.costUsd)}</Figure>
+                          <Figure>{session.assistant.turns}</Figure> asked
                         </span>
                       )}
                     </td>

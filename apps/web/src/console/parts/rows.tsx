@@ -3,9 +3,6 @@
 
 import { Link } from "react-router-dom";
 import type { SessionSummary } from "../api";
-import { clockText, durationText } from "../format";
-import { useLiveClock } from "../hooks";
-import { cn } from "../classes";
 import { Figure, SampleTag } from "../ui";
 
 /** The identity cell: the session's title over its candidate. */
@@ -23,30 +20,6 @@ export const SessionCell = ({ session, to }: { session: SessionSummary; to?: str
     <p className="truncate text-xs text-faint">{session.candidateName}</p>
   </div>
 );
-
-/** Time left while a session is live, time used once it is not. */
-export const ClockCell = ({ session }: { session: SessionSummary }) => {
-  const live = useLiveClock(session);
-  if (session.status === "scheduled") {
-    return <span className="text-muted">{durationText(session.durationSeconds)}</span>;
-  }
-  if (session.status === "ended") {
-    return (
-      <span className="text-faint">
-        <Figure className="text-muted">{clockText(session.elapsedSeconds)}</Figure> of{" "}
-        <Figure>{clockText(session.durationSeconds)}</Figure>
-      </span>
-    );
-  }
-  return (
-    <span className="text-faint">
-      <Figure className={cn(live.over > 0 ? "text-negative" : "text-ink")}>
-        {live.over > 0 ? `+${clockText(live.over)}` : clockText(live.remaining)}
-      </Figure>
-      {live.over > 0 ? " over" : " left"}
-    </span>
-  );
-};
 
 /** The last judged run, as counts. A session with no run says so in words. */
 export const LastRunCell = ({ session }: { session: SessionSummary }) => {

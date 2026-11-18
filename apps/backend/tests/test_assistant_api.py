@@ -1,6 +1,6 @@
 """The interview assistant over HTTP: the AI policy, what is attached, and what is kept.
 
-The CLI is the stand-in from tests/fake_claude.py, so these check everything
+The CLI is the stand-in from tests/fake_codex.py, so these check everything
 around the model and never call one.
 """
 
@@ -115,7 +115,7 @@ def test_an_assistant_that_is_not_set_up_says_so_and_never_answers(client, inter
 def test_a_broken_setup_is_explained_to_the_interviewer_only(client, interview):
     started_with_candidate(client, interview)
     hub = client.app.state.assistant_hub
-    hub.settings, hub.problem = None, "CLAUDE_CLI_CONFIG_DIR names a reserved Claude profile."
+    hub.settings, hub.problem = None, "CODEX_CLI_CONFIG_DIR names a reserved Codex profile."
     try:
         assert view(client, interview, "user_alice")["assistant"]["detail"] == hub.problem
         seen = view(client, interview, "user_bob")["assistant"]
@@ -130,7 +130,7 @@ def test_an_answer_streams_and_is_stored_with_its_usage(client, interview, assis
     stream = events(ask(client, interview, context={"prompt": True}))
 
     names = [name for name, _ in stream]
-    assert names == ["turn", "started", "thinking", "delta", "delta", "delta", "done"]
+    assert names == ["turn", "started", "thinking", "delta", "done"]
     first = stream[0][1]
     assert (first["status"], first["askedAs"], first["model"]) == ("running", "candidate", "fake-model-1")
     assert [item["kind"] for item in first["context"]] == ["problem"]
@@ -139,7 +139,7 @@ def test_an_answer_streams_and_is_stored_with_its_usage(client, interview, assis
     assert (done["status"], done["answer"], done["error"]) == ("completed", "Check the empty list case.", None)
     assert done["usage"] == {
         "inputTokens": 321, "outputTokens": 45, "cacheReadTokens": 7, "cacheWriteTokens": 3,
-        "costUsd": 0.0125, "durationMs": 432, "firstTokenMs": done["usage"]["firstTokenMs"],
+        "costUsd": None, "durationMs": done["usage"]["durationMs"], "firstTokenMs": done["usage"]["firstTokenMs"],
     }
 
     # The interviewer reads the same turn, and the session's totals follow.
@@ -147,7 +147,7 @@ def test_an_answer_streams_and_is_stored_with_its_usage(client, interview, assis
     assert (stored["id"], stored["userName"], stored["question"]) == (done["id"], "Bob", "Why might this be wrong?")
     summary = client.get(f"/api/interviews/{interview['id']}/summary", headers=auth("user_alice")).json()
     # 321 fresh, 7 read from the prompt cache and 3 written to it: all of it was sent.
-    assert summary["assistant"] == {"turns": 1, "costUsd": 0.0125, "inputTokens": 331, "outputTokens": 45}
+    assert summary["assistant"] == {"turns": 1, "costUsd": 0.0, "inputTokens": 331, "outputTokens": 45}
     assert view(client, interview, "user_bob")["assistant"]["turnsUsed"] == 1
 
 
@@ -279,20 +279,17 @@ def test_a_failure_is_reported_as_one_and_its_detail_is_the_interviewers(client,
     behave(assistant, mode="crash")
     done = events(ask(client, interview))[-1][1]
     assert done["status"] == "failed" and done["answer"] == ""
-    assert done["error"] == "The assistant could not answer. Your interviewer can see the details."
+    assert done["error"] == "Codex could not answer. Try again."
 
     (stored,) = turns(client, interview, "user_alice")
-    assert "status 3" in stored["error"] and "abcdefghijklmnopqrstuvwxyz" not in stored["error"]
+    assert "exited without an answer" in stored["error"] and "abcdefghijklmnopqrstuvwxyz" not in stored["error"]
     assert turns(client, interview, "user_bob")[0]["error"] == done["error"]
 
 
-def test_the_model_that_answered_is_what_gets_recorded(client, interview, assistant):
+def test_the_configured_model_is_recorded(client, interview, assistant):
     started_with_candidate(client, interview)
-    behave(assistant, mode="answer", answered_by="some-other-model")
     done = events(ask(client, interview))[-1][1]
-    assert done["model"] == "some-other-model"
-    # The configured one is still shown beside it, so a difference is visible.
-    assert view(client, interview, "user_bob")["assistant"]["model"] == "fake-model-1"
+    assert done["model"] == view(client, interview, "user_bob")["assistant"]["model"] == "fake-model-1"
 
 
 def wait_for_running_turn(client, interview) -> dict:
@@ -426,6 +423,6 @@ def test_the_settings_page_can_try_the_connection(client, operators, assistant):
 
     described = client.get("/api/interviews/system", headers=auth("user_alice")).json()["assistant"]
     assert described["ready"] is True
-    assert (described["launcher"], described["profile"], described["model"]) == ("fake_claude.py", "profile", "fake-model-1")
+    assert (described["launcher"], described["profile"], described["model"]) == ("fake_codex.py", "profile", "fake-model-1")
     # Names, not paths.
     assert "/" not in described["launcher"] and "/" not in described["profile"]
