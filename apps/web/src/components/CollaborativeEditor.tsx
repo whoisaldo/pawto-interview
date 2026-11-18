@@ -54,7 +54,14 @@ const readDraft = (key: string | undefined): string | null => {
 // leaves the colouring to us. One stylesheet, rewritten whenever the set of
 // peers or their names change. Awareness state is whatever the peer sent, so
 // the colour is picked here and the name is escaped before it enters CSS.
-const cursorStyles = (awareness: WebsocketProvider["awareness"], colorOf: Props["colorOf"]): string => {
+const PRACTICE_TAG_FONT = 'font-family: "Jersey 10", monospace; font-size: 15px;';
+const INTERVIEW_TAG_FONT = 'font-family: "Public Sans Variable", system-ui, sans-serif; font-size: 11px; font-weight: 600;';
+
+const cursorStyles = (
+  awareness: WebsocketProvider["awareness"],
+  colorOf: Props["colorOf"],
+  tagFont = PRACTICE_TAG_FONT,
+): string => {
   const rules: string[] = [];
   awareness.getStates().forEach((state, clientId) => {
     if (clientId === awareness.clientID || !state.user) return;
@@ -64,7 +71,7 @@ const cursorStyles = (awareness: WebsocketProvider["awareness"], colorOf: Props[
     rules.push(
       `.yRemoteSelection-${clientId} { background-color: ${color}33; }`,
       `.yRemoteSelectionHead-${clientId} { position: relative; border-left: 2px solid ${color}; }`,
-      `.yRemoteSelectionHead-${clientId}::after { content: "${name}"; position: absolute; top: -1.3em; left: -2px; padding: 0 4px; font-family: "Jersey 10", monospace; font-size: 15px; line-height: 1.2em; color: #0a0a0b; background-color: ${color}; white-space: nowrap; pointer-events: none; }`,
+      `.yRemoteSelectionHead-${clientId}::after { content: "${name}"; position: absolute; top: -1.3em; left: -2px; padding: 0 4px; ${tagFont} line-height: 1.2em; border-radius: 2px; color: #0a0a0b; background-color: ${color}; white-space: nowrap; pointer-events: none; }`,
     );
   });
   return rules.join("\n");
@@ -111,6 +118,7 @@ const CollaborativeEditor = ({
   const userRef = useRef(user);
   userRef.current = user;
   const colorOfRef = useRef(colorOf);
+  const tagFontRef = useRef(interviewMode ? INTERVIEW_TAG_FONT : PRACTICE_TAG_FONT);
   colorOfRef.current = colorOf;
   const starterCodeRef = useRef(starterCode);
   starterCodeRef.current = starterCode;
@@ -196,7 +204,7 @@ const CollaborativeEditor = ({
         name: userRef.current.name,
       });
       provider.awareness.on("change", () =>
-        setPeerStyles(cursorStyles(provider.awareness, colorOfRef.current)),
+        setPeerStyles(cursorStyles(provider.awareness, colorOfRef.current, tagFontRef.current)),
       );
 
       refresh = setInterval(async () => {
@@ -264,7 +272,7 @@ const CollaborativeEditor = ({
   // The roster decides colours, so a join or leave can recolour a cursor.
   useEffect(() => {
     const provider = providerRef.current;
-    if (provider) setPeerStyles(cursorStyles(provider.awareness, colorOf));
+    if (provider) setPeerStyles(cursorStyles(provider.awareness, colorOf, tagFontRef.current));
   }, [colorOf]);
 
   const handleMount: OnMount = (editor, monaco) => {
@@ -304,7 +312,16 @@ const CollaborativeEditor = ({
           minimap: { enabled: false },
           fontSize,
           ariaLabel: "Python code editor",
-          ...(interviewMode ? { lineHeight: 24, renderLineHighlight: "line" as const } : {}),
+          ...(interviewMode
+            ? {
+                lineHeight: 24,
+                renderLineHighlight: "line" as const,
+                fontFamily: '"JetBrains Mono Variable", ui-monospace, "SF Mono", monospace',
+                folding: false,
+                glyphMargin: false,
+                lineNumbersMinChars: 3,
+              }
+            : {}),
           readOnly,
           lineNumbers: "on",
           scrollBeyondLastLine: false,

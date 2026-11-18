@@ -29,17 +29,17 @@ export const defineEditorTheme: BeforeMount = (monaco) => {
     },
   });
   monaco.editor.defineTheme(INTERVIEW_EDITOR_THEME, {
-    base: "vs",
+    base: "vs-dark",
     inherit: true,
     rules: [],
     colors: {
-      "editor.background": "#ffffff",
-      "editor.lineHighlightBackground": "#f3f5f6",
-      "editorLineNumber.foreground": "#5e6976",
-      "editorLineNumber.activeForeground": "#161b22",
-      "editorGutter.background": "#ffffff",
-      "editor.selectionBackground": "#d8e8fb",
-      "editorCursor.foreground": "#1d5fbf",
+      "editor.background": "#17181b",
+      "editor.lineHighlightBackground": "#22242a",
+      "editorLineNumber.foreground": "#a2a9b4",
+      "editorLineNumber.activeForeground": "#f0f2f5",
+      "editorGutter.background": "#17181b",
+      "editor.selectionBackground": "#263e61",
+      "editorCursor.foreground": "#85b5ff",
     },
   });
 };

@@ -50,7 +50,7 @@ def test_the_starter_passes_every_example_and_fails_four_held_back_cases(client,
 def test_judging_every_case_is_opt_in(client, operators):
     """Practice problems still stop at the first failure."""
     dao = ProblemDAO(client.app.state.db_pool)
-    spec = client.portal.call(dao.get_judge_spec, problem(client, "two-sum")["id"])
+    spec = client.portal.call(dao.get_judge_spec, problem(client, "valid-parentheses")["id"])
     assert spec["stopOnFailure"] is True
 
 

@@ -81,6 +81,7 @@ if AUTH_MODE not in {"clerk", "demo"}:
 # Demo mode only. Both are secrets and neither has a default.
 DEMO_AUTH_SECRET = os.getenv("DEMO_AUTH_SECRET", "")
 DEMO_OPERATOR_CODE = os.getenv("DEMO_OPERATOR_CODE", "")
+DEMO_OPERATOR_NAME = os.getenv("DEMO_OPERATOR_NAME", "").strip() or "Demo interviewer"
 # Who may reach a demo-mode API at all: this machine and its tailnet.
 DEMO_ALLOWED_NETWORKS = [
     network.strip()

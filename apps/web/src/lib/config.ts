@@ -7,8 +7,12 @@
 // preview reached by more than one hostname needs.
 const explicit = import.meta.env.VITE_BACKEND_URL;
 const port = import.meta.env.VITE_BACKEND_PORT;
+// A demo page served through a public proxy finds the API on its own origin.
+const sameOrigin = import.meta.env.VITE_AUTH_MODE === "demo" &&
+  document.querySelector('meta[name="tandemcode-same-origin-api"]') !== null;
 const BACKEND_URL =
-  explicit || (port ? `${window.location.protocol}//${window.location.hostname}:${port}` : "http://localhost:8080");
+  sameOrigin ? window.location.origin :
+    explicit || (port ? `${window.location.protocol}//${window.location.hostname}:${port}` : "http://localhost:8080");
 
 export const API_BASE_URL = `${BACKEND_URL}/api`;
 export const BACKEND_ORIGIN = BACKEND_URL;

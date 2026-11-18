@@ -1,4 +1,10 @@
-"""Run a bounded, text-only Codex question through the local CLI."""
+"""Run a bounded, text-only Codex question through the local CLI.
+
+Each question starts its own `codex app-server` over stdio, opens one
+ephemeral thread whose base instructions are the assistant's own, and reads
+the answer as it is written. The server is the only way the CLI streams an
+answer word by word; `codex exec` prints it whole at the end.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +15,7 @@ import re
 import signal
 import stat
 import time
+import tomllib
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,7 +28,7 @@ MAX_TIMEOUT_SECONDS = 300.0
 MAX_PROMPT_BYTES = 64 * 1024
 # What one answer may print before the run is stopped.
 MAX_OUTPUT_BYTES = 48 * 1024
-# Codex emits complete messages on individual JSONL lines.
+# The server writes one JSON-RPC message per line.
 STREAM_LINE_LIMIT = 4 * 1024 * 1024
 # Between asking a run to stop and killing it.
 KILL_GRACE_SECONDS = 3.0
@@ -37,6 +44,17 @@ INHERITED_ENV = ("PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE"
 # Files that would make the working directory a project with its own
 # instructions or tools.
 WORKDIR_FORBIDDEN = ("AGENTS.md", "AGENTS.override.md", ".codex", ".git")
+
+# Everything that would give the model a tool, a plugin, a hook or a reason to
+# start another program. The assistant writes text and nothing else.
+DISABLED_FEATURES = (
+    "shell_tool", "unified_exec", "shell_snapshot", "apps", "plugins", "remote_plugin",
+    "plugin_discovery_prefetch", "hooks", "multi_agent", "multi_agent_v2", "goals", "skill_search",
+    "browser_use", "browser_use_external", "computer_use", "image_generation", "view_image",
+    "sleep_tool", "tool_suggest", "daemon_auto_start", "workspace_dependencies",
+)
+# An MCP server name that can be named on a command line as it is.
+MCP_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 COMPLETED, CANCELLED, FAILED, TIMEOUT, TRUNCATED = "completed", "cancelled", "failed", "timeout", "truncated"
 
@@ -191,27 +209,40 @@ def validate(settings: CliSettings) -> None:
             )
 
 
-def build_argv(settings: CliSettings, system_prompt: str) -> list[str]:
+def configured_mcp_servers(config_dir: Path) -> list[str]:
+    """MCP servers named in the profile's config.toml, each to be switched off.
+
+    `codex app-server` has no switch to ignore the profile's config, so every
+    server it names is disabled by name. A name that cannot be is a refusal.
+    """
+    try:
+        data = tomllib.loads((config_dir / "config.toml").read_text())
+    except FileNotFoundError:
+        return []
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        raise CliConfigError("The Codex profile's config.toml cannot be read") from exc
+    servers = data.get("mcp_servers") or {}
+    if not isinstance(servers, dict):
+        raise CliConfigError("The Codex profile's mcp_servers is not a table")
+    for name in servers:
+        if not MCP_NAME_PATTERN.match(name):
+            raise CliConfigError("The Codex profile names an MCP server that cannot be switched off")
+    return sorted(servers)
+
+
+def build_argv(settings: CliSettings) -> list[str]:
     """The exact program and arguments. No caller-supplied text is in here."""
-    argv = [
-        str(settings.command), "--ask-for-approval", "never", "exec",
-        "--json", "--color", "never", "--ephemeral",
-        "--ignore-user-config", "--ignore-rules", "--skip-git-repo-check",
-        "--sandbox", "read-only",
-        "--disable", "shell_tool", "--disable", "unified_exec",
-        "--disable", "apps", "--disable", "plugins", "--disable", "hooks",
-        "--disable", "multi_agent", "--disable", "multi_agent_v2",
-        "--disable", "goals", "--disable", "skill_search",
+    argv = [str(settings.command), "app-server"]
+    for feature in DISABLED_FEATURES:
+        argv += ["--disable", feature]
+    argv += [
         "--enable", "skip_host_skill_discovery",
         "-c", "suppress_unstable_features_warning=true",
         "-c", 'web_search="disabled"',
         "-c", "project_doc_max_bytes=0",
-        "-c", f"developer_instructions={json.dumps(system_prompt)}",
-        "--model", settings.model,
     ]
-    if settings.effort:
-        argv += ["-c", f'model_reasoning_effort="{settings.effort}"']
-    argv.append("-")
+    for name in configured_mcp_servers(settings.config_dir):
+        argv += ["-c", f"mcp_servers.{name}.enabled=false"]
     return argv
 
 
@@ -234,7 +265,8 @@ class CliRun:
         if not prompt.strip():
             raise ValueError("The prompt is empty")
         self.settings = settings
-        self.argv = build_argv(settings, system_prompt)
+        self.system_prompt = system_prompt
+        self.argv = build_argv(settings)
         self.env = build_env(settings)
         self.prompt = prompt
         self.process: asyncio.subprocess.Process | None = None
@@ -273,6 +305,25 @@ class CliRun:
         if process.returncode is None:
             await process.wait()
 
+    def _requests(self) -> dict[str, dict]:
+        """The JSON-RPC requests this run sends, in order, keyed by id."""
+        workdir = str(self.settings.workdir)
+        return {
+            "init": {"method": "initialize", "params": {"clientInfo": {"name": "tandemcode", "version": "1"}, "capabilities": None}},
+            "mcp": {"method": "mcpServerStatus/list", "params": {}},
+            "thread": {
+                "method": "thread/start",
+                "params": {
+                    "model": self.settings.model,
+                    "cwd": workdir,
+                    "approvalPolicy": "never",
+                    "sandbox": "read-only",
+                    "baseInstructions": self.system_prompt,
+                    "ephemeral": True,
+                },
+            },
+        }
+
     async def events(self) -> AsyncIterator[Event]:
         usage = Usage(model=self.settings.model)
         answer: list[str] = []
@@ -281,6 +332,12 @@ class CliRun:
         error: str | None = None
         stderr_tail = b""
         started = time.monotonic()
+        # Text streamed so far for each message item, so a completed item
+        # only adds what its deltas did not.
+        streamed: dict[str, str] = {}
+        current_item: str | None = None
+        thread_id: str | None = None
+        requests = self._requests()
 
         try:
             self.process = await asyncio.create_subprocess_exec(
@@ -306,17 +363,33 @@ class CliRun:
                 tail = (tail + chunk)[-2000:]
             return tail
 
+        async def send(message: dict) -> None:
+            process.stdin.write((json.dumps(message) + "\n").encode())
+            await process.stdin.drain()
+
+        async def ask(key: str, request: dict) -> None:
+            await send({"id": key, **request})
+
+        def take(text: str) -> str:
+            """Keep what fits under the output cap and say whether it all did."""
+            nonlocal answer_bytes, status
+            remaining = MAX_OUTPUT_BYTES - answer_bytes
+            if len(text.encode()) > remaining:
+                text = text.encode()[:remaining].decode("utf-8", errors="ignore")
+                status = TRUNCATED
+            answer.append(text)
+            answer_bytes += len(text.encode())
+            return text
+
         stderr_task = asyncio.create_task(read_stderr())
         try:
             async with asyncio.timeout(self.settings.timeout_seconds):
-                process.stdin.write(self.prompt.encode())
                 try:
-                    await process.stdin.drain()
-                    process.stdin.close()
+                    await ask("init", requests["init"])
                 except (BrokenPipeError, ConnectionResetError):
                     pass
 
-                while True:
+                while status is None:
                     try:
                         raw = await process.stdout.readline()
                     except ValueError:
@@ -331,55 +404,112 @@ class CliRun:
                         continue
                     if not isinstance(message, dict):
                         continue
-                    kind = message.get("type")
+                    method = message.get("method")
+                    params = message.get("params") if isinstance(message.get("params"), dict) else {}
 
-                    if kind == "thread.started":
-                        yield Started(usage.model)
-                    elif kind == "turn.started":
+                    if "id" in message and method:
+                        # The server asking for something: an approval, a tool
+                        # call, input. This assistant grants none of them.
+                        await send({"id": message["id"], "error": {"code": -32601, "message": "Not available here"}})
+                        continue
+
+                    if "id" in message:
+                        key = message["id"]
+                        failure = message.get("error")
+                        if failure:
+                            detail = failure.get("message") if isinstance(failure, dict) else None
+                            status = FAILED
+                            error = sanitize(detail) if isinstance(detail, str) else "Codex refused the request"
+                            break
+                        result = message.get("result") or {}
+                        if key == "init":
+                            await send({"method": "initialized"})
+                            await ask("mcp", requests["mcp"])
+                        elif key == "mcp":
+                            servers = result.get("data") or []
+                            if any(server.get("tools") or server.get("serverInfo") for server in servers if isinstance(server, dict)):
+                                status, error = FAILED, "Codex started an MCP server. The assistant does not run with tools."
+                                break
+                            await ask("thread", requests["thread"])
+                        elif key == "thread":
+                            thread_id = (result.get("thread") or {}).get("id")
+                            if isinstance(result.get("model"), str):
+                                usage.model = result["model"]
+                            yield Started(usage.model)
+                            turn = {
+                                "threadId": thread_id,
+                                "input": [{"type": "text", "text": self.prompt, "text_elements": []}],
+                                "summary": "none",
+                            }
+                            if self.settings.effort:
+                                turn["effort"] = self.settings.effort
+                            await ask("turn", {"method": "turn/start", "params": turn})
+                        continue
+
+                    if params.get("threadId") not in (None, thread_id):
+                        continue
+                    if method == "turn/started":
                         yield Thinking()
-                    elif kind == "item.completed":
-                        item = message.get("item") or {}
-                        item_type = item.get("type")
-                        if item_type == "error" and isinstance(item.get("message"), str):
-                            error = sanitize(item["message"])
-                        if item_type != "agent_message" or not isinstance(item.get("text"), str):
+                    elif method == "item/agentMessage/delta":
+                        item_id, text = params.get("itemId"), params.get("delta")
+                        if not isinstance(text, str) or not text:
                             continue
                         if usage.first_token_ms is None:
                             usage.first_token_ms = int((time.monotonic() - started) * 1000)
-                        text = ("\n\n" if answer else "") + item["text"]
-                        remaining = MAX_OUTPUT_BYTES - answer_bytes
-                        if len(text.encode()) > remaining:
-                            text = text.encode()[:remaining].decode("utf-8", errors="ignore")
-                            status = TRUNCATED
-                        if text:
-                            answer.append(text)
-                            answer_bytes += len(text.encode())
-                            yield Delta(text)
-                        if status == TRUNCATED:
-                            break
-                    elif kind == "turn.completed":
-                        tokens = message.get("usage") or {}
-                        total = _int(tokens.get("input_tokens"))
-                        usage.cache_read_tokens = _int(tokens.get("cached_input_tokens"))
-                        usage.cache_write_tokens = _int(tokens.get("cache_write_input_tokens"))
-                        if total is not None:
+                        if item_id != current_item:
+                            current_item = item_id
+                            if answer:
+                                text = "\n\n" + text
+                        streamed[item_id] = streamed.get(item_id, "") + params["delta"]
+                        if piece := take(text):
+                            yield Delta(piece)
+                    elif method == "item/completed":
+                        item = params.get("item") or {}
+                        if item.get("type") != "agentMessage" or not isinstance(item.get("text"), str):
+                            continue
+                        so_far = streamed.get(item.get("id"), "")
+                        rest = item["text"][len(so_far):] if item["text"].startswith(so_far) else ""
+                        if not rest:
+                            continue
+                        if usage.first_token_ms is None:
+                            usage.first_token_ms = int((time.monotonic() - started) * 1000)
+                        if not so_far and answer:
+                            rest = "\n\n" + rest
+                        streamed[item.get("id")] = item["text"]
+                        current_item = item.get("id")
+                        if piece := take(rest):
+                            yield Delta(piece)
+                    elif method == "thread/tokenUsage/updated":
+                        total = (params.get("tokenUsage") or {}).get("total") or {}
+                        sent = _int(total.get("inputTokens"))
+                        usage.cache_read_tokens = _int(total.get("cachedInputTokens"))
+                        usage.cache_write_tokens = _int(total.get("cacheWriteInputTokens"))
+                        if sent is not None:
                             # Stored separately so older transcripts and the session totals stay comparable.
-                            usage.input_tokens = max(0, total - (usage.cache_read_tokens or 0) - (usage.cache_write_tokens or 0))
-                        usage.output_tokens = _int(tokens.get("output_tokens"))
-                        status = COMPLETED if answer else FAILED
-                        error = None if answer else "Codex returned no answer"
-                        break
-                    elif kind in ("error", "turn.failed"):
-                        failure = message.get("error") or {}
-                        detail = failure.get("message") or message.get("message")
-                        if isinstance(detail, str):
-                            error = sanitize(detail)
-                        if kind == "turn.failed":
+                            usage.input_tokens = max(0, sent - (usage.cache_read_tokens or 0) - (usage.cache_write_tokens or 0))
+                        usage.output_tokens = _int(total.get("outputTokens"))
+                    elif method == "error":
+                        failure = params.get("error") or {}
+                        if isinstance(failure.get("message"), str) and not params.get("willRetry"):
+                            error = sanitize(failure["message"])
+                    elif method == "turn/completed":
+                        turn = params.get("turn") or {}
+                        outcome = turn.get("status")
+                        failure = turn.get("error") or {}
+                        if outcome == "interrupted":
+                            status = CANCELLED if self.cancelled else FAILED
+                            error = None if self.cancelled else "Codex stopped the answer"
+                        elif outcome == "failed":
                             status = FAILED
-                            error = error or "Codex could not answer"
-                            break
+                            detail = failure.get("message") if isinstance(failure, dict) else None
+                            error = sanitize(detail) if isinstance(detail, str) else (error or "Codex could not answer")
+                        else:
+                            status = COMPLETED if answer else FAILED
+                            error = None if answer else "Codex returned no answer"
         except TimeoutError:
             status, error = TIMEOUT, f"No answer within {int(self.settings.timeout_seconds)} seconds"
+        except (BrokenPipeError, ConnectionResetError):
+            pass
         finally:
             await self._stop()
             try:

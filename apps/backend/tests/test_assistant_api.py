@@ -185,7 +185,7 @@ def test_held_back_cases_never_reach_the_candidates_assistant(client, interview,
     prompt = sent(assistant)["stdin"]
     for held_back in ("whitespace log", "empty arrays", "error metadata only", "Held-back"):
         assert held_back not in prompt, held_back
-    assert "have not seen any held-back test case" in sent(assistant)["argv"][sent(assistant)["argv"].index("--system-prompt") + 1]
+    assert "have not seen the held-back test cases" in sent(assistant)["system"]
 
     # The interviewer's own question can include them: they can already see them.
     events(ask(client, interview, "user_alice", code=CODE, context=everything))

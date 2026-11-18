@@ -23,22 +23,22 @@
 
   --font-app: "Public Sans Variable", ui-sans-serif, system-ui, sans-serif;
   --font-figure: "JetBrains Mono Variable", ui-monospace, "SF Mono", monospace;
-  --color-ground: #f3f5f6;
-  --color-surface: #ffffff;
-  --color-raised: #e9edf0;
-  --color-line: #dce1e5;
-  --color-rule: #e8ebee;
-  --color-control: #b9c1ca;
-  --color-ink: #161b22;
-  --color-muted: #505b67;
-  --color-faint: #5e6976;
-  --color-accent: #1d5fbf;
-  --color-positive: #176534;
-  --color-positive-soft: #e4f3e9;
-  --color-negative: #ad292e;
-  --color-negative-soft: #fbeaec;
-  --color-warning: #82430c;
-  --color-warning-soft: #fbefdb;
+  --color-ground: #101113;
+  --color-surface: #17181b;
+  --color-raised: #22242a;
+  --color-line: #2e3138;
+  --color-rule: #292c32;
+  --color-control: #535963;
+  --color-ink: #f0f2f5;
+  --color-muted: #b5bdc8;
+  --color-faint: #a2a9b4;
+  --color-accent: #85b5ff;
+  --color-positive: #83d5a2;
+  --color-positive-soft: #192d22;
+  --color-negative: #ff9b9d;
+  --color-negative-soft: #382124;
+  --color-warning: #edbb77;
+  --color-warning-soft: #342a1d;
   --text-body: 0.875rem;
   --text-body--line-height: 1.25rem;
 
@@ -84,7 +84,7 @@ body {
 
 /* The interview screens set their own ground over the page's dotted one. */
 .console {
-  color-scheme: light;
+  color-scheme: dark;
   font-family: var(--font-app);
   background-color: var(--color-ground);
   background-image: none;
@@ -130,15 +130,26 @@ body {
   border-radius: 0.25rem;
 }
 .console .prose-answer pre {
-  overflow-x: auto;
   background-color: var(--color-ground);
   border: 1px solid var(--color-line);
   border-radius: 0.375rem;
   padding: 0.6rem 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  /* A narrow sidebar wraps long lines rather than hiding their ends. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .console .prose-answer pre code {
   background: none;
   padding: 0;
+  font-size: inherit;
+}
+.console .prose-answer .diff-add {
+  color: var(--color-positive);
+}
+.console .prose-answer .diff-remove {
+  color: var(--color-negative);
 }
 .console .prose-answer a {
   text-decoration: underline;

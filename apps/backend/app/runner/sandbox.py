@@ -39,8 +39,12 @@ SANDBOX_RUNTIME = os.getenv("SANDBOX_RUNTIME")
 
 
 def pull(image: str) -> None:
+    """Make sure the image is there: one built on this host is used as it is."""
     # Bounded like every docker call here: a hung daemon should fail loudly
     # rather than leave the runner waiting forever with runs piling up.
+    present = subprocess.run(["docker", "image", "inspect", image], capture_output=True, timeout=60)
+    if present.returncode == 0:
+        return
     subprocess.run(["docker", "pull", "--quiet", image], check=True, capture_output=True, timeout=600)
 
 

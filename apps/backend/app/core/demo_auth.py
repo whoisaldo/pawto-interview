@@ -31,7 +31,7 @@ from app.core import config
 
 ISSUER = "tandemcode-demo"
 OPERATOR_ID = "demo_operator"
-OPERATOR_NAME = "Demo interviewer"
+OPERATOR_NAME = config.DEMO_OPERATOR_NAME
 OPERATOR_EMAIL = "interviewer@demo.invalid"
 CANDIDATE_PREFIX = "demo_candidate_"
 

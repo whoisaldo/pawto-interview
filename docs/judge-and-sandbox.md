@@ -28,6 +28,8 @@ Containers share the host's kernel, so a single kernel bug could let a program o
 
 The runner starts containers through the host's Docker socket, which makes the runner as trusted as the host. Run it on a machine that runs nothing but TandemCode.
 
+`apps/backend/sandbox/Dockerfile` builds an image with the FastAPI stack on top of `python:3.11-slim`, for problems that ask for a small web app, such as `tasks-api`. A problem like that fails in the plain image. On start the runner uses an image already on the host, as a locally built one is, and pulls only when there is none. The judge's process limit allows no threads, so such a problem's harness drives the app on asyncio and its handlers are `async def`.
+
 Without `SANDBOX_IMAGE`, the runner refuses to start unless `ALLOW_UNSANDBOXED=1` is set. Then it judges in its own process with resource limits only, which the test suite uses and nothing else should.
 
 ## Complexity analysis

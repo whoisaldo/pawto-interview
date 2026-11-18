@@ -5,4 +5,10 @@ import tailwindcss from "@tailwindcss/vite";
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: {
+      // See src/lib/monacoRuntime.js: one copy of the editor, loaded at runtime.
+      "monaco-editor/esm/vs/editor/editor.api.js": "/src/lib/monacoRuntime.js",
+    },
+  },
 });

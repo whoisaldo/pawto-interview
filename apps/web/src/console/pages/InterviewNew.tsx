@@ -34,7 +34,7 @@ const Form = ({
   const navigate = useNavigate();
   const { sessions } = useConsole();
   const [params] = useSearchParams();
-  const initial = library.find((problem) => problem.slug === params.get("problem")) ?? library.find((problem) => problem.slug === "two-sum") ?? library[0];
+  const initial = library.find((problem) => problem.slug === params.get("problem")) ?? library.find((problem) => problem.slug === "tasks-api") ?? library[0];
 
   const [problemId, setProblemId] = useState(initial.id);
   const problem = library.find((item) => item.id === problemId) ?? initial;

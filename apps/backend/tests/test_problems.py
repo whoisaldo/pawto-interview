@@ -37,8 +37,11 @@ def test_every_problem_is_complete(client, signed_up):
         assert problem["difficulty"] in {"easy", "medium", "hard"}, problem["slug"]
         assert problem["statement"], problem["slug"]
         # A function to fill in, not a script: the starter is a class with
-        # a documented method, and it must at least compile.
-        assert "class Solution" in problem["starterCode"] or "class Codec" in problem["starterCode"], problem["slug"]
+        # a documented method, or a small FastAPI app with handlers to fix,
+        # and it must at least compile.
+        assert any(
+            shape in problem["starterCode"] for shape in ("class Solution", "class Codec", "app = FastAPI(")
+        ), problem["slug"]
         compile(problem["starterCode"], problem["slug"], "exec")
         assert len(problem["samples"]) >= 2, problem["slug"]
 

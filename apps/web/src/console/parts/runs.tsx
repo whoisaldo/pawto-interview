@@ -12,8 +12,9 @@ const outcome = (item: RunCase) => (!item.ran ? "Not run" : item.passed ? "Passe
 const tone = (item: RunCase) => (!item.ran ? "neutral" : item.passed ? "positive" : "negative");
 const printed = (item: RunCase) => (item.stdout ?? "").trim();
 
+// A failed case the viewer can see opens on its own: the diff is the point.
 const CaseRow = ({ item, detailed }: { item: RunCase; detailed: boolean }) => (
-  <details className="group border-t border-rule first:border-t-0">
+  <details className="group border-t border-rule first:border-t-0" open={detailed && item.ran && item.passed === false}>
     <summary className="grid cursor-pointer list-none grid-cols-[1fr_auto] items-center gap-x-3 px-4 py-2 hover:bg-raised/50 sm:grid-cols-[minmax(0,1.2fr)_5rem_minmax(0,1fr)_minmax(0,1fr)] [&::-webkit-details-marker]:hidden">
       <span className="min-w-0 truncate text-ink">{item.name}</span>
       <Pill tone={tone(item)} className="justify-self-start">

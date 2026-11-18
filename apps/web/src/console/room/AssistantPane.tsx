@@ -15,8 +15,6 @@ interface Stream {
   thinking: boolean;
 }
 
-const EMPTY_SELECTION = { prompt: false, code: false, tests: false };
-
 const STATE_DOT: Record<string, string> = {
   ready: "bg-positive",
   policy_off: "border border-faint",
@@ -29,6 +27,8 @@ const STATE_DOT: Record<string, string> = {
 
 const byteLength = (text: string) => new TextEncoder().encode(text).length;
 
+const STARTERS = ["Why are my tests failing?", "Explain what this code does.", "What edge cases should I test?"];
+
 export const AssistantPane = ({
   view,
   role,
@@ -39,7 +39,7 @@ export const AssistantPane = ({
 }: {
   view: SessionView;
   role: Role;
-  /** The editor's text right now. Sent only when "My code" is ticked. */
+  /** The editor's text right now. Sent with every question. */
   code: string;
   latestRunAt: string | null;
   /** Changes when the room hears that a question finished somewhere. */
@@ -49,7 +49,6 @@ export const AssistantPane = ({
   const sessionId = view.id;
   const { assistant } = view;
   const turns = useResource(`turns:${sessionId}`, () => interviewApi.turns(sessionId), 15000);
-  const [selection, setSelection] = useStored(`tandemcode.assistant.attach.${sessionId}`, EMPTY_SELECTION);
   const [conversationId, setConversationId] = useStored<string | null>(
     `tandemcode.assistant.conversation.${sessionId}.${role}`,
     null,
@@ -79,11 +78,11 @@ export const AssistantPane = ({
 
   const ready = assistant.state === "ready";
   const codeBytes = byteLength(code);
-  const codeTooLarge = selection.code && codeBytes > assistant.limits.codeBytes;
+  const codeTooLarge = codeBytes > assistant.limits.codeBytes;
 
-  const ask = async (event?: FormEvent) => {
+  const ask = async (event?: FormEvent, preset?: string) => {
     event?.preventDefault();
-    const text = question.trim();
+    const text = (preset ?? question).trim();
     if (!text || abort.current || answering || !ready || codeTooLarge) return;
     const controller = new AbortController();
     abort.current = controller;
@@ -96,9 +95,9 @@ export const AssistantPane = ({
         sessionId,
         {
           question: text,
-          context: { prompt: selection.prompt, code: selection.code && Boolean(code.trim()), tests: selection.tests && Boolean(latestRunAt) },
-          // The editor's text leaves the browser only when its box is ticked.
-          ...(selection.code && code.trim() ? { code } : {}),
+          // Codex always sees the problem, the editor and the latest results.
+          context: { prompt: true, code: Boolean(code.trim()), tests: Boolean(latestRunAt) },
+          ...(code.trim() ? { code } : {}),
           ...(conversationId ? { conversationId } : {}),
         },
         {
@@ -156,11 +155,6 @@ export const AssistantPane = ({
   const shown = turns.data ?? [];
   const liveId = stream?.turn?.id;
   const statusLine = answering ? (stopping ? "Stopping…" : "Working…") : ready ? "Ready" : assistant.detail;
-  const attachments = [
-    { key: "prompt", label: "Problem", disabled: false },
-    { key: "code", label: "Code", disabled: !code.trim() },
-    { key: "tests", label: "Tests", disabled: !latestRunAt },
-  ] as const;
 
   return (
     <div className="flex h-full min-h-0 flex-col text-sm">
@@ -185,7 +179,26 @@ export const AssistantPane = ({
       <div className="min-h-0 flex-1 overflow-y-auto" aria-label="Conversation">
         {view.aiPolicy === "allowed" && (turns.error && !turns.data ? (
           <Failure message={turns.error} onRetry={turns.reload} />
-        ) : shown.length === 0 && !answering ? null : (
+        ) : shown.length === 0 && !answering ? (
+          ready && (
+            <div className="space-y-3 px-4 py-4">
+              <p className="text-xs text-faint">Codex sees the problem, the code and the latest test results.</p>
+              <div className="flex flex-col items-start gap-1.5">
+                {STARTERS.map((starter) => (
+                  <button
+                    key={starter}
+                    type="button"
+                    disabled={codeTooLarge}
+                    onClick={() => void ask(undefined, starter)}
+                    className="rounded-md border border-line px-2.5 py-1.5 text-left text-sm text-muted transition-colors hover:border-control hover:text-ink disabled:opacity-50"
+                  >
+                    {starter}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )
+        ) : (
           <div className="divide-y divide-rule">
             {shown.filter((turn) => turn.id !== liveId).map((turn) => (
               <TurnBlock key={turn.id} turn={turn} viewer={role} configuredModel={assistant.model} compact />
@@ -207,24 +220,6 @@ export const AssistantPane = ({
 
       {view.aiPolicy === "allowed" && (ready || answering) && (
         <form onSubmit={ask} className="flex-none border-t border-line bg-surface p-3">
-          <fieldset className="mb-2 flex flex-wrap items-center gap-1.5" disabled={answering || !ready}>
-            <legend className="sr-only">Attach context</legend>
-            {attachments.map((item) => (
-              <label
-                key={item.key}
-                className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line px-2 py-1 text-xs text-muted has-checked:border-control has-checked:bg-raised has-checked:text-ink has-disabled:cursor-not-allowed has-disabled:opacity-50"
-              >
-                <input
-                  type="checkbox"
-                  checked={selection[item.key] && !item.disabled}
-                  disabled={item.disabled}
-                  onChange={(event) => setSelection({ ...selection, [item.key]: event.target.checked })}
-                  className="size-3 accent-[var(--color-ink)]"
-                />
-                {item.label}
-              </label>
-            ))}
-          </fieldset>
           <div className="flex items-end gap-1.5 rounded-lg border border-control bg-ground p-1.5 focus-within:border-faint">
             <textarea
               aria-label="Ask Codex"
@@ -248,7 +243,7 @@ export const AssistantPane = ({
             )}
           </div>
           {role === "candidate" && <p id="codex-visibility" className="mt-1.5 text-xs text-faint">Visible to your interviewer</p>}
-          {codeTooLarge && <Note tone="negative">Code exceeds {bytesText(assistant.limits.codeBytes)}. Remove the attachment to send.</Note>}
+          {codeTooLarge && <Note tone="negative">The code is over {bytesText(assistant.limits.codeBytes)}, too long to send to Codex.</Note>}
           {error && <Note tone="negative">{error}</Note>}
         </form>
       )}

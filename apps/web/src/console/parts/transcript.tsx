@@ -2,6 +2,8 @@
 // and what each one used. The interviewer and the candidate read the same
 // record through this.
 
+import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import Markdown from "react-markdown";
 import type { Role, Turn } from "../api";
 import { bytesText, countText, secondsText, timeOfDay, usdText } from "../format";
@@ -57,11 +59,43 @@ const STATUS_NOTE: Partial<Record<Turn["status"], { tone: "negative" | "warning"
   truncated: { tone: "warning", text: "Cut off at the size limit." },
 };
 
+/** A fenced diff shows its added and removed lines in colour; other code as it is. */
+const Code = ({ className, children }: { className?: string; children?: ReactNode }) => {
+  if (className !== "language-diff" || typeof children !== "string") {
+    return <code className={className}>{children}</code>;
+  }
+  return (
+    <code className={className}>
+      {children.split(/(?<=\n)/).map((line, index) => (
+        <span key={index} className={line.startsWith("+") ? "diff-add" : line.startsWith("-") ? "diff-remove" : undefined}>
+          {line}
+        </span>
+      ))}
+    </code>
+  );
+};
+
 export const Answer = ({ text, streaming }: { text: string; streaming?: boolean }) => (
   <div className={cn("prose-answer text-pretty break-words text-ink", streaming && "min-h-5")} aria-live={streaming ? "polite" : undefined}>
-    <Markdown>{text}</Markdown>
+    <Markdown components={{ code: Code }}>{text}</Markdown>
   </div>
 );
+
+/** Seconds since this component appeared, so a wait never looks frozen. */
+const Waiting = ({ label }: { label: string }) => {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setSeconds((value) => value + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <p className="flex items-center gap-2 text-muted" aria-live="polite">
+      <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-accent" />
+      {label}
+      {seconds > 0 && <Figure className="text-xs text-faint">{seconds}s</Figure>}
+    </p>
+  );
+};
 
 export const TurnBlock = ({
   turn,
@@ -99,11 +133,7 @@ export const TurnBlock = ({
       <div className={compact ? "space-y-1" : "border-l border-control pl-3"}>
         {compact && text && <p className="text-xs font-medium text-muted">Codex</p>}
         {text && <Answer text={text} streaming={live} />}
-        {live && !text && (
-          <p className="text-muted" aria-live="polite">
-            {thinking ? "Working…" : "Sending…"}
-          </p>
-        )}
+        {live && !text && <Waiting label={thinking ? "Thinking…" : "Sending…"} />}
         {note && (
           <Note tone={note.tone} className={text ? "mt-2" : undefined}>
             {compact && turn.status === "failed" ? (turn.error ?? "Codex could not answer.") : [note.text, turn.error].filter(Boolean).join(" ")}

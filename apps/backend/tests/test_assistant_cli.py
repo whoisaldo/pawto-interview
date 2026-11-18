@@ -42,6 +42,11 @@ def record(settings: cli.CliSettings) -> dict:
     return json.loads((settings.config_dir / "record.json").read_text())
 
 
+def sent(seen: dict, method: str) -> dict:
+    """The params of the first request of this method the stand-in received."""
+    return next(request["params"] for request in seen["requests"] if request.get("method") == method)
+
+
 def collect(run: cli.CliRun) -> list:
     async def gather():
         return [event async for event in run.events()]
@@ -61,10 +66,12 @@ def heartbeat_stopped(settings: cli.CliSettings) -> bool:
 
 
 def test_the_answer_streams_in_order_and_ends_with_usage(settings):
+    behave(settings, pieces=["Check the empty ", "list case."])
     events = collect(cli.CliRun(settings, "system prompt", "a question"))
 
     assert isinstance(events[0], cli.Started) and events[0].model == "fake-model-1"
-    assert [type(event) for event in events[1:-1]] == [cli.Thinking, cli.Delta]
+    assert [type(event) for event in events[1:-1]] == [cli.Thinking, cli.Delta, cli.Delta]
+    assert [event.text for event in events if isinstance(event, cli.Delta)] == ["Check the empty ", "list case."]
     finished = events[-1]
     assert isinstance(finished, cli.Finished)
     assert (finished.status, finished.answer, finished.error) == (cli.COMPLETED, "Check the empty list case.", None)
@@ -79,21 +86,79 @@ def test_the_prompt_goes_in_on_stdin_and_never_on_the_command_line(settings):
     collect(cli.CliRun(settings, "system prompt", HOSTILE))
     seen = record(settings)
 
-    assert seen["stdin"] == HOSTILE
+    assert sent(seen, "turn/start")["input"] == [{"type": "text", "text": HOSTILE, "text_elements": []}]
     assert all(HOSTILE not in argument and "touch" not in argument for argument in seen["argv"])
     assert not Path("/tmp/owned-by-prompt").exists()
-    # The fixed flags: no tools, no saved session, nothing from the profile.
+    # The fixed flags: no tools, no plugins, no hooks, no project files.
     argv = seen["argv"]
-    assert argv[argv.index("--ask-for-approval") + 1] == "never"
-    assert argv[argv.index("--sandbox") + 1] == "read-only"
-    for flag in ("--ephemeral", "--ignore-user-config", "--ignore-rules", "--json"):
-        assert flag in argv
+    assert argv[0] == "app-server"
     disabled = {argv[index + 1] for index, arg in enumerate(argv) if arg == "--disable"}
-    assert {"shell_tool", "unified_exec", "apps", "plugins", "hooks", "multi_agent"} <= disabled
-    assert argv[argv.index("--model") + 1] == "fake-model-1"
-    assert 'model_reasoning_effort="low"' in argv
-    assert 'developer_instructions="system prompt"' in argv
-    assert argv[-1] == "-"
+    assert set(cli.DISABLED_FEATURES) == disabled
+    assert {"shell_tool", "unified_exec", "apps", "plugins", "hooks", "computer_use", "browser_use"} <= disabled
+    assert "project_doc_max_bytes=0" in argv and 'web_search="disabled"' in argv
+    # The thread: the assistant's own instructions, no approvals, nothing saved.
+    thread = sent(seen, "thread/start")
+    assert thread == {
+        "model": "fake-model-1",
+        "cwd": str(settings.workdir),
+        "approvalPolicy": "never",
+        "sandbox": "read-only",
+        "baseInstructions": "system prompt",
+        "ephemeral": True,
+    }
+    turn = sent(seen, "turn/start")
+    assert (turn["threadId"], turn["effort"], turn["summary"]) == ("thread-fixture", "low", "none")
+
+
+def test_every_mcp_server_in_the_profile_is_switched_off(settings):
+    (settings.config_dir / "config.toml").write_text(
+        'model = "other"\n[mcp_servers.blender]\ncommand = "/bin/blender-mcp"\n[mcp_servers.docs-2]\nurl = "https://example.invalid"\n'
+    )
+    collect(cli.CliRun(settings, "system prompt", "a question"))
+    argv = record(settings)["argv"]
+    assert "mcp_servers.blender.enabled=false" in argv
+    assert "mcp_servers.docs-2.enabled=false" in argv
+
+
+def test_an_mcp_server_name_that_cannot_be_switched_off_is_refused(settings):
+    (settings.config_dir / "config.toml").write_text('[mcp_servers."a.b"]\ncommand = "x"\n')
+    with pytest.raises(cli.CliConfigError, match="MCP server"):
+        cli.CliRun(settings, "system prompt", "a question")
+    (settings.config_dir / "config.toml").write_text("not toml = = =")
+    with pytest.raises(cli.CliConfigError, match="config.toml"):
+        cli.CliRun(settings, "system prompt", "a question")
+
+
+def test_a_running_mcp_server_stops_the_question_before_the_model_is_asked(settings):
+    behave(settings, mode="mcp-running")
+    finished = collect(cli.CliRun(settings, "system prompt", "a question"))[-1]
+    assert finished.status == cli.FAILED and "MCP" in finished.error
+    assert not any(request.get("method") == "thread/start" for request in record(settings)["requests"])
+
+
+def test_requests_from_the_server_are_refused(settings):
+    behave(settings, mode="asks")
+    finished = collect(cli.CliRun(settings, "system prompt", "a question"))[-1]
+    assert finished.status == cli.COMPLETED and finished.answer == "Answered without it."
+    reply = record(settings)["approval_reply"]
+    assert reply["id"] == 99 and "error" in reply and "result" not in reply
+
+
+def test_messages_for_another_thread_are_ignored(settings):
+    behave(settings, mode="other-thread")
+    assert collect(cli.CliRun(settings, "system prompt", "a question"))[-1].answer == "Yours."
+
+
+def test_separate_messages_are_kept_apart(settings):
+    behave(settings, mode="two")
+    assert collect(cli.CliRun(settings, "system prompt", "a question"))[-1].answer == "First part.\n\nSecond part."
+
+
+def test_a_refused_thread_is_a_failure_with_nothing_key_shaped_in_it(settings):
+    behave(settings, mode="refused")
+    finished = collect(cli.CliRun(settings, "system prompt", "a question"))[-1]
+    assert finished.status == cli.FAILED and "model not available" in finished.error
+    assert "abcdefghijklmnopqrstuvwxyz" not in finished.error
 
 
 def test_the_cli_starts_in_its_own_directory_with_a_bare_environment(settings, monkeypatch):

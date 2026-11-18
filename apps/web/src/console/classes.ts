@@ -16,7 +16,7 @@ const buttonBase =
 
 const buttonVariants = {
   // Primary by inversion, and one per screen.
-  primary: "bg-ink text-white hover:bg-[#343d47]",
+  primary: "bg-ink text-ground hover:bg-muted",
   secondary: "border border-control text-ink hover:border-faint hover:bg-raised",
   ghost: "text-muted hover:bg-raised hover:text-ink",
   danger: "border border-negative/50 text-negative hover:bg-negative-soft",

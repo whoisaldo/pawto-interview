@@ -2,6 +2,7 @@
 // interviewer does.
 
 import type { ReactNode } from "react";
+import Markdown from "react-markdown";
 import type { Case, Guide } from "../api";
 import { cn } from "../classes";
 import { Figure, Pre } from "../ui";
@@ -19,10 +20,13 @@ const shown = (text: string) => (text.trim() === "" ? "(no input)" : text.trim()
 export const CaseList = ({ cases, className }: { cases: Case[]; className?: string }) => (
   <ul className={cn("divide-y divide-rule rounded-md border border-line", className)}>
     {cases.map((item) => (
-      <li key={item.index} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-3 gap-y-1 px-3 py-2">
-        <span className="col-span-2 text-body font-medium text-ink">{item.name}</span>
-        <Figure className="min-w-0 text-xs break-words whitespace-pre-line text-muted"><span className="mb-0.5 block font-app text-faint">Input</span>{shown(item.input)}</Figure>
-        <Figure className="text-xs text-ink">
+      <li key={item.index} className="space-y-1.5 px-3 py-2.5">
+        <span className="block text-body font-medium text-ink">{item.name}</span>
+        <Figure className="block min-w-0 text-xs break-words whitespace-pre-wrap text-muted">
+          <span className="mb-0.5 block font-app text-faint">Input</span>
+          {shown(item.input)}
+        </Figure>
+        <Figure className="block min-w-0 text-xs break-words whitespace-pre-wrap text-ink">
           <span className="mb-0.5 block font-app text-faint">Expected</span>
           {item.expected}
         </Figure>
@@ -31,9 +35,20 @@ export const CaseList = ({ cases, className }: { cases: Case[]; className?: stri
   </ul>
 );
 
+// Statements are plain text with the odd `code` span or list. A single
+// newline stays a line break, as it was when they were shown as plain text.
+const asMarkdown = (text: string) => text.replace(/([^\n])\n(?!\n)/g, "$1  \n");
+
+/** Inline Markdown only: `code`, emphasis. For one-line items such as criteria. */
+export const InlineText = ({ text }: { text: string }) => (
+  <Markdown allowedElements={["p", "code", "em", "strong"]} unwrapDisallowed components={{ p: ({ children }) => <>{children}</> }}>
+    {text}
+  </Markdown>
+);
+
 export const Statement = ({ text, className }: { text: string | null; className?: string }) => (
-  <div className={cn("space-y-3 text-pretty whitespace-pre-line text-ink", className)}>
-    {text ?? "This problem has no statement."}
+  <div className={cn("prose-answer text-pretty text-ink", className)}>
+    {text ? <Markdown>{asMarkdown(text)}</Markdown> : <p>This problem has no statement.</p>}
   </div>
 );
 
@@ -45,7 +60,7 @@ export const Criteria = ({ items, empty }: { items: string[]; empty?: ReactNode 
       {items.map((item, index) => (
         <li key={index} className="flex gap-2.5 text-pretty">
           <span aria-hidden className="mt-2 size-1 flex-none rounded-full bg-faint" />
-          <span>{item}</span>
+          <span className="prose-answer"><InlineText text={item} /></span>
         </li>
       ))}
     </ul>

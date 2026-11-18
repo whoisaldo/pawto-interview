@@ -24,7 +24,7 @@ A candidate can edit, run tests and ask Codex while the session is running. The 
 
 ## Held-back cases
 
-Two Sum is preselected for new interviews. Its statement, starter and reference solution are defined in `V18__two_sum_interview.sql`. A problem's hidden tests are the held-back cases in an interview. The judge runs them with every run. The candidate is shown the public examples with their output and is told how many cases are held back, and nothing else: not their inputs, not whether they passed, not how many failed. The interviewer sees all of it.
+The Tasks API exercise is preselected for new interviews: a small FastAPI app whose POST hands every task the same id, with a few smaller faults beside it. Its statement, starter, cases, guide and reference solution are defined in `V19__tasks_api_interview.sql`. Each case sends a few requests through the app on asyncio and compares the status and JSON of every response. Its runs need the judge image described in [judge-and-sandbox.md](judge-and-sandbox.md). A problem's hidden tests are the held-back cases in an interview. The judge runs them with every run. The candidate is shown the public examples with their output and is told how many cases are held back, and nothing else: not their inputs, not whether they passed, not how many failed. The interviewer sees all of it.
 
 The interviewer can reveal the held-back cases once a run has been judged, and not before. The reveal is meant to follow an attempt.
 
@@ -44,11 +44,11 @@ Acceptance criteria, the interviewer's plan, the change request and the referenc
 
 A session either allows AI or does not. The choice has no default in the API: `CreateInterviewRequest` requires it. Both sides see the policy in the room, and it is on every list and in every export.
 
-With AI allowed, a participant can ask Codex from the room's sidebar. `app/assistant/cli.py` runs the signed-in Codex CLI in a dedicated directory. It passes the prompt on stdin and starts Codex with read-only sandboxing, no approvals, disabled shell execution, and disabled plugins, connectors, hooks and subagents. It skips user and project configuration. Cancel, timeout and the response-size limit stop the process group.
+With AI allowed, a participant can ask Codex from the room's sidebar. `app/assistant/cli.py` starts `codex app-server` for each question in a dedicated directory and speaks its JSON-RPC protocol over stdio. The question travels inside that protocol on stdin, never on the command line. Each question gets one ephemeral thread with read-only sandboxing and no approvals, and the assistant's `SYSTEM_PROMPT` replaces Codex's own base instructions. The features in `DISABLED_FEATURES` are switched off, which covers shell execution, plugins, connectors, hooks, subagents, browser and computer use, and image tools. The app server has no switch to skip the profile's `config.toml`, so every MCP server named there is disabled by name, and a question stops before the model is asked if the server reports any MCP server running. Requests the server makes back, such as approvals, are refused. Cancel, timeout and the response-size limit stop the process group.
 
-The web app receives status events and completed text messages as Codex emits them. The CLI reports token counts with the turn, and elapsed time is measured on the server. Per-turn dollar cost is unavailable through this connection.
+The web app receives the answer word by word as Codex writes it. The server reports token counts with the turn, and elapsed time is measured on the server. Per-turn dollar cost is unavailable through this connection.
 
-Only what the asker ticks is attached to a question: the problem, the editor's text, the latest test results. The server builds the problem and the test results itself, so a candidate's attachment cannot include a held-back case before the reveal. The editor's text is the one part the browser supplies, because the server keeps no copy of the document, and it is sent only when its box is ticked.
+Every question carries the problem, the editor's text and the latest test results, when there are any. The server builds the problem and the test results itself, so a candidate's attachment cannot include a held-back case before the reveal. The editor's text is the one part the browser supplies, because the server keeps no copy of the document, and it is sent with each question.
 
 Every question is stored in `interview_ai_turns` with what was attached, the configured model, tokens and time. The interviewer reads all of them. A candidate reads their own. The interviewer can see sanitized failure details.
 
@@ -81,7 +81,7 @@ It is built so that it cannot become a way around real sign-in:
 
 To run a demonstration:
 
-1. In the API's environment set `AUTH_MODE=demo`, `DEMO_AUTH_SECRET` and `DEMO_OPERATOR_CODE`, and leave `CLERK_ISSUER` and `CLERK_SECRET_KEY` empty.
+1. In the API's environment set `AUTH_MODE=demo`, `DEMO_AUTH_SECRET` and `DEMO_OPERATOR_CODE`, and leave `CLERK_ISSUER` and `CLERK_SECRET_KEY` empty. `DEMO_OPERATOR_NAME` is the name the interviewer is shown under, and is optional.
 2. Build the web app with `VITE_AUTH_MODE=demo`. That build has only the interview screens. The practice rooms sign in with Clerk and are left out.
 3. Start the runner with `SANDBOX_IMAGE` set, as always.
 4. Optionally run `python -m app.interview_seed` for a few sample sessions. They are flagged as samples and shown as such. Their runs are judged by the real runner, and no assistant conversation is made up.
