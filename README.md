@@ -28,6 +28,17 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/naman0r/tandemcode" alt="License"></a>
 </p>
 
+## About this fork
+
+PawtoInterview is a fork of [TandemCode](https://github.com/sidebandstudio/tandemcode) for running technical interviews where AI is allowed. It adds:
+
+- an interviewer console with sessions, invite links and held-back test cases
+- a Codex sidebar that streams its answers and proposes code edits, which the candidate approves or denies
+- evidence notes, with exports as JSON or Markdown
+- a local demo sign-in for running it on one machine
+
+[docs/interviews.md](docs/interviews.md) describes the interview side. TandemCode's Apache-2.0 licence covers the whole repository. The commit history shows what changed from upstream.
+
 Two people share a room, edit the same code with live cursors, chat, and run their solution against the problem's tests together. Everyone in the room sees the verdict, and the session can be replayed afterwards. TandemCode is free and open source under the Apache License 2.0.
 
 ## What it does
