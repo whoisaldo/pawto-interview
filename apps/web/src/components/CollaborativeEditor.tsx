@@ -37,6 +37,8 @@ interface Props {
   restoreToken?: number;
   // Ctrl or Cmd with Enter, pressed inside the editor.
   onRunShortcut?: () => void;
+  // The editor once it exists, for edits made on the user's behalf.
+  onEditorMount?: (editor: MonacoEditor) => void;
 }
 
 const DRAFT_SAVE_MS = 400;
@@ -79,7 +81,7 @@ const cursorStyles = (
 
 const WS_URL = `${WS_BASE_URL}/ws/yjs`;
 
-type MonacoEditor = Parameters<OnMount>[0];
+export type MonacoEditor = Parameters<OnMount>[0];
 
 // Clerk session tokens last about a minute. y-websocket re-reads provider.params
 // every time it dials, so refreshing well inside that window is what lets a
@@ -102,6 +104,7 @@ const CollaborativeEditor = ({
   draftKey,
   restoreToken,
   onRunShortcut,
+  onEditorMount,
 }: Props) => {
   const { getToken, isLoaded, isSignedIn, sessionId } = useSession();
   // Held in a ref so that a fresh getToken identity from Clerk cannot re-run the
@@ -277,6 +280,7 @@ const CollaborativeEditor = ({
 
   const handleMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+    onEditorMount?.(editor);
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => onRunShortcutRef.current?.());
 
     editor.onDidChangeModelContent(() => {

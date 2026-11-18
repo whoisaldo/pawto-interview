@@ -10,6 +10,8 @@ import { ArrowLeft, PanelRightClose, PanelRightOpen, Play, Send } from "lucide-r
 import { Link } from "react-router-dom";
 import { Group, Panel as SplitPanel, Separator, useDefaultLayout, usePanelRef } from "react-resizable-panels";
 import CollaborativeEditor from "../../components/CollaborativeEditor";
+import type { MonacoEditor } from "../../components/CollaborativeEditor";
+import { applyHunks } from "../parts/edits";
 import useWebSocket from "../../hooks/UseWebSocket";
 import type { ChatMessage, RoomMember } from "../../hooks/UseWebSocket";
 import { useUser } from "../../hooks/useUser";
@@ -320,6 +322,7 @@ export const RoomScreen = ({
     useWebSocket(roomId);
 
   const [code, setCode] = useState("");
+  const codeEditor = useRef<MonacoEditor | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const [restoreToken, setRestoreToken] = useState(0);
@@ -440,6 +443,9 @@ export const RoomScreen = ({
           draftKey={`tandemcode.draft.${session.id}.${session.problem.id}.${user.id}`}
           restoreToken={restoreToken}
           onRunShortcut={run}
+          onEditorMount={(instance) => {
+            codeEditor.current = instance;
+          }}
         />
       </div>
     </div>
@@ -455,6 +461,7 @@ export const RoomScreen = ({
       latestRunAt={latestJudged?.createdAt ?? null}
       changed={interviewChange}
       onAvailabilityStale={() => void view.reload()}
+      applyEdit={locked ? null : (hunks) => applyHunks(codeEditor.current, hunks)}
     />
   );
   const chat = <ChatPane messages={messages} connected={isConnected} send={sendMessage} />;

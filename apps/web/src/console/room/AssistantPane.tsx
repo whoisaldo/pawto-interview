@@ -6,6 +6,8 @@ import type { Role, SessionView, Turn } from "../api";
 import { bytesText } from "../format";
 import { useResource, useStored } from "../hooks";
 import { TurnBlock } from "../parts/transcript";
+import { EditContext } from "../parts/edits";
+import type { Hunk } from "../parts/edits";
 import { cn } from "../classes";
 import { Button, Failure, IconButton, Note } from "../ui";
 
@@ -36,6 +38,7 @@ export const AssistantPane = ({
   latestRunAt,
   changed,
   onAvailabilityStale,
+  applyEdit,
 }: {
   view: SessionView;
   role: Role;
@@ -45,6 +48,8 @@ export const AssistantPane = ({
   /** Changes when the room hears that a question finished somewhere. */
   changed: unknown;
   onAvailabilityStale: () => void;
+  /** Puts an approved edit into the editor; null while the editor is locked. */
+  applyEdit: ((hunks: Hunk[]) => string | null) | null;
 }) => {
   const sessionId = view.id;
   const { assistant } = view;
@@ -157,6 +162,7 @@ export const AssistantPane = ({
   const statusLine = answering ? (stopping ? "Stopping…" : "Working…") : ready ? "Ready" : assistant.detail;
 
   return (
+    <EditContext.Provider value={{ apply: applyEdit }}>
     <div className="flex h-full min-h-0 flex-col text-sm">
       <header className="flex min-h-9 flex-none items-center justify-between gap-2 bg-ground px-3">
         <p className="flex items-center gap-1.5 text-xs text-muted" role="status">
@@ -248,5 +254,6 @@ export const AssistantPane = ({
         </form>
       )}
     </div>
+    </EditContext.Provider>
   );
 };

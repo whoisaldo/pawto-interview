@@ -9,6 +9,7 @@ import type { Role, Turn } from "../api";
 import { bytesText, countText, secondsText, timeOfDay, usdText } from "../format";
 import { cn } from "../classes";
 import { Figure, Note, Pill } from "../ui";
+import { EditProposal } from "./EditProposal";
 
 const CONTEXT_WORDS: Record<string, string> = {
   problem: "problem",
@@ -75,9 +76,44 @@ const Code = ({ className, children }: { className?: string; children?: ReactNod
   );
 };
 
-export const Answer = ({ text, streaming }: { text: string; streaming?: boolean }) => (
+interface HastNode {
+  type?: string;
+  value?: string;
+  tagName?: string;
+  properties?: { className?: unknown };
+  children?: HastNode[];
+}
+
+const textOf = (node: HastNode): string => node.value ?? (node.children ?? []).map(textOf).join("");
+
+export const Answer = ({
+  text,
+  streaming,
+  turnId,
+  mine = false,
+}: {
+  text: string;
+  streaming?: boolean;
+  /** Set for answers that can carry edit proposals. */
+  turnId?: string;
+  mine?: boolean;
+}) => (
   <div className={cn("prose-answer text-pretty break-words text-ink", streaming && "min-h-5")} aria-live={streaming ? "polite" : undefined}>
-    <Markdown components={{ code: Code }}>{text}</Markdown>
+    <Markdown
+      components={{
+        code: Code,
+        pre: ({ node, children }) => {
+          const inner = (node as HastNode | undefined)?.children?.find((child) => child.tagName === "code");
+          const classes = inner?.properties?.className;
+          if (turnId && inner && Array.isArray(classes) && classes.includes("language-edit")) {
+            return <EditProposal text={textOf(inner).replace(/\n$/, "")} turnId={turnId} live={Boolean(streaming)} mine={mine} />;
+          }
+          return <pre>{children}</pre>;
+        },
+      }}
+    >
+      {text}
+    </Markdown>
   </div>
 );
 
@@ -132,7 +168,7 @@ export const TurnBlock = ({
 
       <div className={compact ? "space-y-1" : "border-l border-control pl-3"}>
         {compact && text && <p className="text-xs font-medium text-muted">Codex</p>}
-        {text && <Answer text={text} streaming={live} />}
+        {text && <Answer text={text} streaming={live} turnId={turn.id} mine={turn.askedAs === viewer} />}
         {live && !text && <Waiting label={thinking ? "Thinking…" : "Sending…"} />}
         {note && (
           <Note tone={note.tone} className={text ? "mt-2" : undefined}>
