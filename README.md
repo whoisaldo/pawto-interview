@@ -37,7 +37,7 @@ PawtoInterview is a fork of [TandemCode](https://github.com/sidebandstudio/tande
 - evidence notes, with exports as JSON or Markdown
 - a local demo sign-in for running it on one machine
 
-[docs/interviews.md](docs/interviews.md) describes the interview side. TandemCode's Apache-2.0 licence covers the whole repository. The commit history shows what changed from upstream.
+[docs/interviews.md](docs/interviews.md) describes the interview side. TandemCode's Apache-2.0 licence covers the repository, with one exception. The Actual Output or Placeholder? exercise is ported from [Pawtograder](https://github.com/pawtograder/platform), which is GPL-3.0-or-later. These files are licensed the same way: `V16__add_actual_grader_output.sql` and `V17__interview_guides.sql`, which say so at the top, and `tests/solutions/actual-grader-output.py`, which has to match the reference in V17 byte for byte and so carries no header. The licence text is in [licenses/GPL-3.0-or-later.txt](licenses/GPL-3.0-or-later.txt). The commit history shows what changed from upstream.
 
 Two people share a room, edit the same code with live cursors, chat, and run their solution against the problem's tests together. Everyone in the room sees the verdict, and the session can be replayed afterwards. TandemCode is free and open source under the Apache License 2.0.
 

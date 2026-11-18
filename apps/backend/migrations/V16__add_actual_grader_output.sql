@@ -1,5 +1,12 @@
 -- V16: Add the Actual Output or Placeholder problem
 
+-- The Actual Output or Placeholder? exercise is ported from Pawtograder's
+-- graderResultsHasAutograderTestsOrOutput (https://github.com/pawtograder/platform,
+-- lib/submissionHasGraderOutput.ts). Pawtograder is copyright (C) 2025 Jonathan
+-- Bell and licensed under the GNU General Public License, version 3 or later.
+-- This file is a derivative and is licensed the same way; see
+-- licenses/GPL-3.0-or-later.txt. The rest of the repository is Apache-2.0.
+
 INSERT INTO problems (slug, title, difficulty, time_limit_ms, mem_limit_mb, statement, starter_code, tests)
 VALUES (
   'actual-grader-output',
